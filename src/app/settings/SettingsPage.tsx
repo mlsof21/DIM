@@ -13,6 +13,7 @@ import { sortedStoresSelector } from 'app/inventory/selectors';
 import { useLoadStores } from 'app/inventory/store/hooks';
 import WishListSettings from 'app/settings/WishListSettings';
 import { useIsPhonePortrait } from 'app/shell/selectors';
+import SpeechRecognitionSettings from 'app/speech-recognition/SpeechRecognitionSettings';
 import DimApiSettings from 'app/storage/DimApiSettings';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import StreamDeckSettings from 'app/stream-deck/StreamDeckSettings/StreamDeckSettings';
@@ -241,6 +242,7 @@ export default function SettingsPage() {
     $featureFlags.elgatoStreamDeck && !isPhonePortrait
       ? { id: 'stream-deck', title: 'Elgato Stream Deck' }
       : undefined,
+    { id: 'speech-recognition', title: 'Speech Recognition' },
   ]);
 
   const uniqChars =
@@ -548,6 +550,8 @@ export default function SettingsPage() {
           <Spreadsheets />
 
           {$featureFlags.elgatoStreamDeck && !isPhonePortrait && <StreamDeckSettings />}
+
+          <SpeechRecognitionSettings />
 
           {$DIM_FLAVOR !== 'release' && currentAccount?.destinyVersion === 2 && (
             <TroubleshootingSettings />

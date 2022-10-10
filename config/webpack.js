@@ -51,6 +51,11 @@ module.exports = (env) => {
 
   let version = env.dev ? packageJson.version.toString() : process.env.VERSION;
 
+  // added for testing mobile
+  if (process.env.NETWORK) {
+    console.log('Running on network');
+  }
+
   if (!env.dev) {
     console.log('Building DIM version ' + version);
   }
@@ -81,7 +86,7 @@ module.exports = (env) => {
     // Dev server
     devServer: env.dev
       ? {
-          host: process.env.DOCKER ? '0.0.0.0' : 'localhost',
+          host: process.env.DOCKER || process.env.NETWORK ? '0.0.0.0' : 'localhost',
           allowedHosts: 'all',
           server: {
             type: 'https',

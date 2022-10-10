@@ -9,6 +9,7 @@ import { lazyLoadStreamDeck, startStreamDeckConnection } from 'app/stream-deck/s
 import { streamDeckEnabled } from 'app/stream-deck/util/local-storage';
 import { infoLog } from 'app/utils/log';
 import ReactDOM from 'react-dom/client';
+import 'regenerator-runtime/runtime';
 import idbReady from 'safari-14-idb-fix';
 import setupRateLimiter from './app/bungie-api/rate-limit-config';
 import './app/google';

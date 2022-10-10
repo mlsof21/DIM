@@ -4,6 +4,7 @@
 import { currentAccountSelector } from 'app/accounts/selectors';
 import { startFarming, stopFarming } from 'app/farming/actions';
 import { t } from 'app/i18next-t';
+import { DimItem } from 'app/inventory/item-types';
 import { moveItemTo } from 'app/inventory/move-item';
 import {
   allItemsSelector,
@@ -207,7 +208,7 @@ function freeBucketSlotHandler({
 */
 function pullItemHandler({ msg, state, store }: HandlerArgs<PullItemAction>): ThunkResult {
   return async (dispatch) => {
-    const allItems = allItemsSelector(state);
+    const allItems: DimItem[] = allItemsSelector(state);
     const vaultStore = vaultSelector(state);
     const selected = allItems.filter((it) => it.index.startsWith(msg.item));
     const moveToVaultItem = selected.find((it) => it.owner === store.id);

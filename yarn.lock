@@ -1785,6 +1785,21 @@
   dependencies:
     "@sinonjs/commons" "^1.7.0"
 
+"@speechly/browser-client@^2.4.1":
+  version "2.4.2"
+  resolved "https://registry.yarnpkg.com/@speechly/browser-client/-/browser-client-2.4.2.tgz#ecf6fb4ca548aaaf118cafc9c9b5c4f1a19339d2"
+  integrity sha512-PkqKJqfhBRK8wWansY1t3aiC16ZpOMyYVeBBmPha3Pbt0fsfGSiz0yLkMIMYzdRQ/f2vsJJvWVny63GtechQXA==
+  dependencies:
+    base-64 "^0.1.0"
+    uuid "^8.0.0"
+
+"@speechly/speech-recognition-polyfill@^1.2.0":
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/@speechly/speech-recognition-polyfill/-/speech-recognition-polyfill-1.2.0.tgz#13bcc9310798dd2c4ddb7e4e9988782d20387303"
+  integrity sha512-G58yLyyoJdB5r8r9ZwK4vuQ7lqHyfqCExIjGQp/nIXBYiLs5WKU0XPFVvEG3Hptf/oT9lzCz1lOcozmp+Dh3Iw==
+  dependencies:
+    "@speechly/browser-client" "^2.4.1"
+
 "@surma/rollup-plugin-off-main-thread@^2.2.3":
   version "2.2.3"
   resolved "https://registry.yarnpkg.com/@surma/rollup-plugin-off-main-thread/-/rollup-plugin-off-main-thread-2.2.3.tgz#ee34985952ca21558ab0d952f00298ad2190c053"
@@ -2144,6 +2159,11 @@
   dependencies:
     "@types/react" "*"
 
+"@types/react-speech-recognition@^3.9.0":
+  version "3.9.0"
+  resolved "https://registry.yarnpkg.com/@types/react-speech-recognition/-/react-speech-recognition-3.9.0.tgz#645e5de99c0837cc928b607979cc6c66a01e64c3"
+  integrity sha512-GstxYfAs4kFPPTQ3p2RU2NmRni5CnxUCHPioq4UytitootYa7iA4aEvXEXHH7S330kMcBY1MuhJ6CV696++0PQ==
+
 "@types/react-test-renderer@^18.0.0":
   version "18.0.0"
   resolved "https://registry.yarnpkg.com/@types/react-test-renderer/-/react-test-renderer-18.0.0.tgz#7b7f69ca98821ea5501b21ba24ea7b6139da2243"
@@ -2183,6 +2203,11 @@
     "@types/prop-types" "*"
     "@types/scheduler" "*"
     csstype "^3.0.2"
+
+"@types/regenerator-runtime@^0.13.1":
+  version "0.13.1"
+  resolved "https://registry.yarnpkg.com/@types/regenerator-runtime/-/regenerator-runtime-0.13.1.tgz#1285f0b1b0508e0ead609104b9a42409473122d1"
+  integrity sha512-Wr4Kopo+zs7kl1mxveVrP7Hl5nEzauQKdSNFN5Eg27Ze11MAgJYKgidYc9AAkQzGXXWH9lqVzPbXUGH6M8VY6g==
 
 "@types/resolve@1.17.1":
   version "1.17.1"
@@ -3035,6 +3060,11 @@ balanced-match@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/balanced-match/-/balanced-match-2.0.0.tgz#dc70f920d78db8b858535795867bf48f820633d9"
   integrity sha512-1ugUSr8BHXRnK23KfuYS+gVMC3LB8QGH9W1iGtDPsNWoQbgtXSExkBu2aDR4epiGWZOjZsj6lDl/N/AqqTC3UA==
+
+base-64@^0.1.0:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/base-64/-/base-64-0.1.0.tgz#780a99c84e7d600260361511c4877613bf24f6bb"
+  integrity sha512-Y5gU45svrR5tI2Vt/X9GPd3L0HNIKzGu202EjxrXMpuc2V2CiKgemAbUUsqYmZJvPtCXoUKjNZwBJzsNScUbXA==
 
 batch@0.6.1:
   version "0.6.1"
@@ -4938,6 +4968,11 @@ functions-have-names@^1.2.2:
   version "1.2.3"
   resolved "https://registry.yarnpkg.com/functions-have-names/-/functions-have-names-1.2.3.tgz#0404fe4ee2ba2f607f0e0ec3c80bae994133b834"
   integrity sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==
+
+fuse.js@^6.6.2:
+  version "6.6.2"
+  resolved "https://registry.yarnpkg.com/fuse.js/-/fuse.js-6.6.2.tgz#fe463fed4b98c0226ac3da2856a415576dc9a111"
+  integrity sha512-cJaJkxCCxC8qIIcPBF9yGxY0W/tVZS3uEISDxhYIdtk8OL93pe+6Zj7LjCqVV4dzbqcriOZ+kQ/NE4RXZHsIGA==
 
 generate-json-webpack-plugin@^2.0.0:
   version "2.0.0"
@@ -8089,6 +8124,11 @@ react-shallow-renderer@^16.15.0:
     object-assign "^4.1.1"
     react-is "^16.12.0 || ^17.0.0 || ^18.0.0"
 
+react-speech-recognition@^3.9.1:
+  version "3.9.1"
+  resolved "https://registry.yarnpkg.com/react-speech-recognition/-/react-speech-recognition-3.9.1.tgz#dea4c4163e7cfb8e8c9e523abc99127eee7bcd43"
+  integrity sha512-HzhHydSvLcpaCW7q9HZamNg4XQaKXEMGBT9rYP/rGhbwBRj6dgrCZsHcoV3Lr3WSDyFw0svXeoRzbG/cneFGnQ==
+
 react-spring@^9.4.3:
   version "9.5.5"
   resolved "https://registry.yarnpkg.com/react-spring/-/react-spring-9.5.5.tgz#314009a65efc04d0ef157d3d60590dbb9de65f3c"
@@ -8269,7 +8309,7 @@ regenerate@^1.4.2:
   resolved "https://registry.yarnpkg.com/regenerate/-/regenerate-1.4.2.tgz#b9346d8827e8f5a32f7ba29637d398b69014848a"
   integrity sha512-zrceR/XhGYU/d/opr2EKO7aRHUeiBI8qjtfHqADTwZd6Szfy16la6kqD0MIUs5z5hx6AaKa+PixpPrR289+I0A==
 
-regenerator-runtime@^0.13.4:
+regenerator-runtime@^0.13.4, regenerator-runtime@^0.13.9:
   version "0.13.9"
   resolved "https://registry.yarnpkg.com/regenerator-runtime/-/regenerator-runtime-0.13.9.tgz#8925742a98ffd90814988d7566ad30ca3b263b52"
   integrity sha512-p3VT+cOEgxFsRRA9X4lkI1E+k2/CtnKtU4gcxyaCUreilL/vqI6CdZ3wxVUx3UOUg+gnUOQQcRI7BmSI656MYA==
