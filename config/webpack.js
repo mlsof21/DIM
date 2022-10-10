@@ -403,6 +403,7 @@ module.exports = (env) => {
         $DIM_WEB_CLIENT_ID: JSON.stringify(process.env.WEB_OAUTH_CLIENT_ID),
         $DIM_WEB_CLIENT_SECRET: JSON.stringify(process.env.WEB_OAUTH_CLIENT_SECRET),
         $DIM_API_KEY: JSON.stringify(process.env.DIM_API_KEY),
+        $SPEECHLY_APP_ID: JSON.stringify(process.env.SPEECHLY_APP_ID),
 
         $BROWSERS: JSON.stringify(browserslist(packageJson.browserslist)),
 

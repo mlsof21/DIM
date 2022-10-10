@@ -8,25 +8,26 @@ import DragPerformanceFix from 'app/inventory/DragPerformanceFix';
 import { storesLoadedSelector } from 'app/inventory/selectors';
 import { useLoadStores } from 'app/inventory/store/hooks';
 import { MaterialCountsSheet } from 'app/material-counts/MaterialCountsWrappers';
-import { useDimSpeechRecognition } from 'app/speech-recognition/speech-recognition';
+import SpeechRecognitionTranscript from 'app/speech-recognition/SpeechRecognitionTranscript';
+import { infoLog } from 'app/utils/log';
 import { useSelector } from 'react-redux';
 import Stores from './Stores';
 
 export default function Inventory({ account }: { account: DestinyAccount }) {
+  infoLog('inventory', 'loaded');
   const storesLoaded = useSelector(storesLoadedSelector);
   useLoadStores(account);
+
   const settings = useSelector(settingsSelector);
-  const startListening = useDimSpeechRecognition(settings.activationPhrase);
+
   if (!storesLoaded) {
     return <ShowPageLoading message={t('Loading.Profile')} />;
   }
-
-  if (settings.speechRecognition) {
-    startListening();
-  }
-
   return (
     <ErrorBoundary name="Inventory">
+      {settings.speechRecognition && (
+        <SpeechRecognitionTranscript activationPhrase={settings.activationPhrase} />
+      )}
       <Stores />
       <DragPerformanceFix />
       {account.destinyVersion === 2 && <GearPower />}

@@ -5,6 +5,7 @@ declare const $DIM_WEB_API_KEY: string;
 declare const $DIM_WEB_CLIENT_ID: string;
 declare const $DIM_WEB_CLIENT_SECRET: string;
 declare const $DIM_API_KEY: string;
+declare const $SPEECHLY_APP_ID: string;
 declare const $BROWSERS: string[];
 
 declare const $featureFlags: {

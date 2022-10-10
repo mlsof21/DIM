@@ -1,0 +1,8 @@
+@use '../variables.scss' as *;
+
+.speech {
+  display: flex;
+  position: absolute;
+  right: 2em;
+  bottom: 2em;
+}
