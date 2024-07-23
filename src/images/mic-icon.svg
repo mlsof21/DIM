@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="69px" height="91px" viewBox="0 0 69 91" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>mic-icon</title>
+    <g id="mic" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle" stroke="#E8A534" stroke-width="7" x="17" y="3" width="35" height="55" rx="17.5"></rect>
+        <path d="M4,37.5 C4,55.4492544 17.6553151,70 34.5,70 C51.3446849,70 65,55.4492544 65,37.5" id="Path" stroke="#E8A534" stroke-width="7" stroke-linecap="round"></path>
+        <line x1="34.5" y1="70.5" x2="34.5" y2="80.5" id="Line" stroke="#E8A534" stroke-width="7" stroke-linecap="square"></line>
+        <line x1="25.5" y1="87.5" x2="43.5" y2="87.5" id="Line-2" stroke="#E8A534" stroke-width="7" stroke-linecap="round"></line>
+    </g>
+</svg>

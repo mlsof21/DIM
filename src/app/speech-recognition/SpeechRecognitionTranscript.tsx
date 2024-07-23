@@ -13,8 +13,9 @@ import { RootState } from 'app/store/types';
 import { errorLog, infoLog } from 'app/utils/log';
 import { DestinyClass } from 'bungie-api-ts/destiny2';
 import Fuse from 'fuse.js';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import micSvg from '../../images/mic-icon.svg';
 import styles from './SpeechRecognitionTranscript.m.scss';
 
 import { getTag } from 'app/inventory/dim-item-info';
@@ -31,6 +32,7 @@ export default function SpeechRecognitionTranscript({
   activationPhrase: string;
 }) {
   const dispatch = useThunkDispatch();
+  const [currentTranscript, setCurrentTranscript] = useState('');
   const allItems = useSelector<RootState, DimItem[]>(allItemsSelector);
   const itemInfos = useSelector(itemInfosSelector);
 
@@ -168,22 +170,26 @@ export default function SpeechRecognitionTranscript({
     commands,
   });
 
-  infoLog('voice', { finalTranscript });
+  useEffect(() => {
+    if (finalTranscript.trim() !== '') {
+      infoLog('voice transcript', currentTranscript);
+      setCurrentTranscript(finalTranscript.trim().toUpperCase());
+      setTimeout(() => setCurrentTranscript(''), 5000);
+    }
+  }, [finalTranscript, currentTranscript]);
 
-  const startListening = () => {
-    infoLog('voice', 'listening');
+  useEffect(() => {
     SpeechRecognitionNative.startListening({ continuous: true });
-  };
+  });
 
   if (!browserSupportsSpeechRecognition) {
     errorLog('voice', 'Speech recognition is not supported by this browser');
   }
 
-  startListening();
-
   return (
     <div className={styles.speech}>
-      <span>{finalTranscript}</span>
+      <span>{currentTranscript}</span>
+      <img src={micSvg} alt="" />
     </div>
   );
 }
