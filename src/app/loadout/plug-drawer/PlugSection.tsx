@@ -1,9 +1,13 @@
+import { TileGrid } from 'app/dim-ui/TileGrid';
+import { t, tl } from 'app/i18next-t';
 import { PluggableInventoryItemDefinition } from 'app/inventory/item-types';
-import React, { useCallback } from 'react';
+import { count } from 'app/utils/collections';
+import { DestinyClass } from 'bungie-api-ts/destiny2';
+import { useCallback } from 'react';
 import { groupModsByModType } from '../mod-utils';
 import styles from './PlugSection.m.scss';
 import SelectablePlug from './SelectablePlug';
-import { PlugSet } from './types';
+import { PlugSelectionType, PlugSet } from './types';
 
 /**
  * A section of plugs in the PlugDrawer component, corresponding to a PlugSet. These will be further
@@ -11,38 +15,43 @@ import { PlugSet } from './types';
  */
 export default function PlugSection({
   plugSet,
-  displayedStatHashes,
+  classType,
+  numSelected,
+  maxSelectable,
   isPlugSelectable,
   onPlugSelected,
   onPlugRemoved,
 }: {
   plugSet: PlugSet;
-  /** A restricted list of stat hashes to display for each plug. If not specified, all stats will be shown. */
-  displayedStatHashes?: number[];
-  /** A function to determine if a given plug is currently selectable. */
-  isPlugSelectable(plug: PluggableInventoryItemDefinition): boolean;
-  onPlugSelected(
+  classType: DestinyClass;
+  numSelected: number;
+  maxSelectable: number;
+  /** A function to further refine whether a given plug is currently selectable. */
+  isPlugSelectable: (plug: PluggableInventoryItemDefinition) => boolean;
+  onPlugSelected: (
     plugSetHash: number,
     mod: PluggableInventoryItemDefinition,
-    selectionType: 'multi' | 'single'
-  ): void;
-  onPlugRemoved(plugSetHash: number, mod: PluggableInventoryItemDefinition): void;
+    selectionType: PlugSelectionType,
+  ) => void;
+  onPlugRemoved: (plugSetHash: number, mod: PluggableInventoryItemDefinition) => void;
 }) {
-  const { plugs, maxSelectable, plugSetHash, headerSuffix, selectionType } = plugSet;
+  const { plugs, plugSetHash, headerSuffix, selectionType } = plugSet;
 
   const handlePlugSelected = useCallback(
     (plug: PluggableInventoryItemDefinition) => onPlugSelected(plugSetHash, plug, selectionType),
-    [onPlugSelected, plugSetHash, selectionType]
+    [onPlugSelected, plugSetHash, selectionType],
   );
 
   const handlePlugRemoved = useCallback(
     (plug: PluggableInventoryItemDefinition) => onPlugRemoved(plugSetHash, plug),
-    [onPlugRemoved, plugSetHash]
+    [onPlugRemoved, plugSetHash],
   );
 
   if (!plugs.length) {
     return null;
   }
+
+  const multiSelect = selectionType !== PlugSelectionType.Single;
 
   // Here we split the section into further pieces so that each plug category has has its own title
   // This is important for combat mods, which would otherwise be grouped into one massive category
@@ -58,32 +67,41 @@ export default function PlugSection({
           header += ` (${headerSuffix})`;
         }
 
+        const key = header;
+
+        if (multiSelect) {
+          header += ` (${t(plugSet.overrideSelectedAndMax ?? tl('LB.SelectModsCount'), {
+            selected: numSelected,
+            maxSelectable,
+          })})`;
+        }
+
         return (
-          <div key={header} className={styles.bucket}>
-            <div className={styles.header}>{header}</div>
-            <div className={styles.items}>
-              {plugs.map((plug) => {
-                const isSelected = plugSet.selected.some((s) => s.hash === plug.hash);
-                const multiSelect = selectionType === 'multi';
-                const selectable = multiSelect
-                  ? plugSet.selected.length < maxSelectable && isPlugSelectable(plug)
-                  : !isSelected && isPlugSelectable(plug);
-                return (
-                  <SelectablePlug
-                    key={plug.hash}
-                    selected={isSelected}
-                    plug={plug}
-                    displayedStatHashes={displayedStatHashes}
-                    selectable={selectable}
-                    selectionType={selectionType}
-                    removable={multiSelect}
-                    onPlugSelected={handlePlugSelected}
-                    onPlugRemoved={handlePlugRemoved}
-                  />
-                );
-              })}
-            </div>
-          </div>
+          <TileGrid key={key} header={header} className={styles.section}>
+            {plugs.map((plug) => {
+              const isSelected = plugSet.selected.some((s) => s.hash === plug.hash);
+              const selectable = multiSelect
+                ? (selectionType !== PlugSelectionType.Unique || !isSelected) &&
+                  numSelected < maxSelectable &&
+                  isPlugSelectable(plug)
+                : !isSelected && isPlugSelectable(plug);
+              const stack = count(plugSet.selected, (p) => p.hash === plug.hash);
+              return (
+                <SelectablePlug
+                  key={plug.hash}
+                  selected={isSelected}
+                  plug={plug}
+                  stack={stack}
+                  classType={classType}
+                  selectable={selectable}
+                  selectionType={selectionType}
+                  removable={multiSelect}
+                  onPlugSelected={handlePlugSelected}
+                  onPlugRemoved={handlePlugRemoved}
+                />
+              );
+            })}
+          </TileGrid>
         );
       })}
     </>

@@ -1,11 +1,18 @@
-import { InventoryBucket } from 'app/inventory/inventory-buckets';
+import { settingSelector } from 'app/dim-api/selectors';
 import { PullFromPostmaster } from 'app/inventory/PullFromPostmaster';
+import { InventoryBucket } from 'app/inventory/inventory-buckets';
 import { DimStore } from 'app/inventory/store-types';
 import { findItemsByBucket } from 'app/inventory/stores-helpers';
-import { postmasterAlmostFull } from 'app/loadout-drawer/postmaster';
+import {
+  POSTMASTER_SIZE,
+  postmasterAlmostFull,
+  postmasterSpaceUsed,
+} from 'app/loadout-drawer/postmaster';
+import { VaultWeaponGroupingStyle } from 'app/settings/initial-settings';
 import clsx from 'clsx';
 import { BucketHashes } from 'data/d2/generated-enums';
 import React from 'react';
+import { useSelector } from 'react-redux';
 import StoreBucket from '../inventory-page/StoreBucket';
 import styles from './StoreBuckets.m.scss';
 
@@ -25,6 +32,7 @@ export function StoreBuckets({
   labels?: boolean;
   singleCharacter: boolean;
 }) {
+  const vaultWeaponGroupingStyle = useSelector(settingSelector('vaultWeaponGroupingStyle'));
   let content: React.ReactNode;
 
   // Don't show buckets with no items
@@ -46,7 +54,7 @@ export function StoreBuckets({
           </div>
         )}
         {(allStoresView || stores[0] === vault) && (
-          <div className="store-cell vault">
+          <div className="store-cell">
             <StoreBucket bucket={bucket} store={vault} singleCharacter={false} />
           </div>
         )}
@@ -57,14 +65,13 @@ export function StoreBuckets({
       <div
         key={store.id}
         className={clsx('store-cell', {
-          vault: store.isVault,
-          postmasterFull:
+          [styles.postmasterFull]:
             bucket.sort === 'Postmaster' &&
             store.destinyVersion === 2 &&
             postmasterAlmostFull(store),
         })}
       >
-        {(!store.isVault || bucket.vaultBucket) && (
+        {(!store.isVault || bucket.vaultBucket || bucket.inPostmaster) && (
           <StoreBucket bucket={bucket} store={store} singleCharacter={singleCharacter} />
         )}
         {bucket.hash === BucketHashes.LostItems &&
@@ -74,11 +81,25 @@ export function StoreBuckets({
     ));
   }
 
+  const postMasterSpaceUsed = postmasterSpaceUsed(stores[0]);
+  const checkPostmaster = bucket.hash === BucketHashes.LostItems;
   return (
     <div
-      className={clsx('store-row', `bucket-${bucket.hash}`, { 'account-wide': bucket.accountWide })}
+      className={clsx('store-row', `bucket-${bucket.hash}`, {
+        'account-wide': bucket.accountWide,
+        inlineGroups: vaultWeaponGroupingStyle === VaultWeaponGroupingStyle.Inline,
+      })}
     >
-      {labels && <div className={clsx(styles.bucketLabel)}>{bucket.name}</div>}
+      {labels && (
+        <div className={styles.bucketLabel}>
+          {bucket.name}
+          {checkPostmaster && (
+            <span>
+              ({postMasterSpaceUsed}/{POSTMASTER_SIZE})
+            </span>
+          )}
+        </div>
+      )}
       {content}
     </div>
   );

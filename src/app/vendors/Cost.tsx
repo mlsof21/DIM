@@ -2,7 +2,6 @@ import BungieImage from 'app/dim-ui/BungieImage';
 import { useD2Definitions } from 'app/manifest/selectors';
 import { DestinyItemQuantity } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
-import React from 'react';
 import styles from './Cost.m.scss';
 
 /**
@@ -17,13 +16,16 @@ export default function Cost({
 }) {
   const defs = useD2Definitions()!;
   const currencyItem = defs.InventoryItem.get(cost.itemHash);
+  if (!currencyItem) {
+    return null;
+  }
   return (
     <div
       className={clsx(styles.cost, className)}
-      title={cost.quantity.toLocaleString() + ' ' + currencyItem.displayProperties.name}
+      title={`${cost.quantity.toLocaleString()} ${currencyItem.displayProperties.name}`}
     >
       {cost.quantity.toLocaleString()}
-      <BungieImage src={currencyItem.displayProperties.icon} />
+      <BungieImage height={12} width={12} src={currencyItem.displayProperties.icon} />
     </div>
   );
 }

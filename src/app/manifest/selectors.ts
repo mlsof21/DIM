@@ -9,7 +9,7 @@ export const destiny2CoreSettingsSelector = (state: RootState) =>
 export const rankProgressionHashesSelector = (state: RootState) =>
   state.manifest.destiny2CoreSettings?.currentRankProgressionHashes ?? emptyArray<number>();
 
-export const d1ManifestSelector = (state: RootState) => state.manifest.d1Manifest;
+const d1ManifestSelector = (state: RootState) => state.manifest.d1Manifest;
 export const d2ManifestSelector = (state: RootState) => state.manifest.d2Manifest;
 
 export const manifestSelector = (state: RootState) =>
@@ -24,3 +24,8 @@ export function useD2Definitions() {
 export function useDefinitions() {
   return useSelector(manifestSelector);
 }
+
+export const loadoutConstantsSelector = (state: RootState) =>
+  d2ManifestSelector(state)?.LoadoutConstants.get(
+    destiny2CoreSettingsSelector(state)?.loadoutConstantsHash ?? 1,
+  );

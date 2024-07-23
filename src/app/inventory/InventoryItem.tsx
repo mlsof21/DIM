@@ -3,17 +3,18 @@ import clsx from 'clsx';
 import { BucketHashes } from 'data/d2/generated-enums';
 import React, { useMemo } from 'react';
 import BungieImage from '../dim-ui/BungieImage';
-import { AppIcon, lockIcon, starIcon, stickyNoteIcon } from '../shell/icons';
+import { AppIcon, lockIcon, stickyNoteIcon } from '../shell/icons';
 import { InventoryWishListRoll } from '../wishlists/wishlists';
 import BadgeInfo, { shouldShowBadge } from './BadgeInfo';
-import { TagValue } from './dim-item-info';
 import styles from './InventoryItem.m.scss';
-import { DimItem } from './item-types';
 import ItemIcon from './ItemIcon';
 import ItemIconPlaceholder from './ItemIconPlaceholder';
 import NewItemIndicator from './NewItemIndicator';
-import { getSubclassIconInfo } from './subclass';
+import { canSyncLockState } from './SyncTagLock';
 import TagIcon from './TagIcon';
+import { TagValue } from './dim-item-info';
+import { DimItem } from './item-types';
+import { getSubclassIconInfo } from './subclass';
 
 interface Props {
   item: DimItem;
@@ -21,26 +22,29 @@ interface Props {
   isNew?: boolean;
   /** User defined tag */
   tag?: TagValue;
-  /**  */
-  notes?: boolean;
+  /** Does this item have notes? Used to show the icon. */
+  hasNotes?: boolean;
   /** Has this been hidden by a search? */
   searchHidden?: boolean;
+  /** Is the setting to automatically lock tagged items on? */
+  autoLockTagged: boolean;
   wishlistRoll?: InventoryWishListRoll;
   /** Hide the selected Super ability on subclasses? */
   hideSelectedSuper?: boolean;
   innerRef?: React.Ref<HTMLDivElement>;
   /** TODO: item locked needs to be passed in */
-  onClick?(e: React.MouseEvent): void;
-  onShiftClick?(e: React.MouseEvent): void;
-  onDoubleClick?(e: React.MouseEvent): void;
+  onClick?: (e: React.MouseEvent) => void;
+  onShiftClick?: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
 }
 
 export default function InventoryItem({
   item,
   isNew,
   tag,
-  notes,
+  hasNotes,
   searchHidden,
+  autoLockTagged,
   wishlistRoll,
   hideSelectedSuper,
   onClick,
@@ -51,7 +55,7 @@ export default function InventoryItem({
   let enhancedOnClick = onClick;
 
   if (onShiftClick) {
-    enhancedOnClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    enhancedOnClick = (e: React.MouseEvent) => {
       if (e.shiftKey) {
         onShiftClick(e);
       } else if (onClick) {
@@ -77,11 +81,15 @@ export default function InventoryItem({
     if (subclassIconInfo) {
       return (
         <>
-          <img
-            src={subclassIconInfo.base}
-            className={clsx('item-img', styles.subclassBase)}
-            alt=""
-          />
+          {subclassIconInfo.base ? (
+            <img
+              src={subclassIconInfo.base}
+              className={clsx('item-img', styles.subclassBase)}
+              alt=""
+            />
+          ) : (
+            <ItemIcon className={styles.subclassBase} item={item} />
+          )}
           {subclassIconInfo.super && (
             <BungieImage src={subclassIconInfo.super} className={styles.subclassSuperIcon} alt="" />
           )}
@@ -99,22 +107,19 @@ export default function InventoryItem({
         )}
         <ItemIcon item={item} />
         <BadgeInfo item={item} isCapped={isCapped} wishlistRoll={wishlistRoll} />
-        {(tag || item.locked || notes) && (
+        {(tag || item.locked || hasNotes) && (
           <div className={styles.icons}>
-            {item.locked && (
-              <AppIcon
-                className={styles.icon}
-                icon={item.bucket.hash !== BucketHashes.Finishers ? lockIcon : starIcon}
-              />
+            {item.locked && (!autoLockTagged || !tag || !canSyncLockState(item)) && (
+              <AppIcon className={styles.icon} icon={lockIcon} />
             )}
             {tag && <TagIcon className={styles.icon} tag={tag} />}
-            {notes && <AppIcon className={styles.icon} icon={stickyNoteIcon} />}
+            {hasNotes && <AppIcon className={styles.icon} icon={stickyNoteIcon} />}
           </div>
         )}
         {isNew && <NewItemIndicator />}
       </>
     );
-  }, [isNew, item, notes, subclassIconInfo, tag, wishlistRoll]);
+  }, [isNew, item, hasNotes, subclassIconInfo, tag, wishlistRoll, autoLockTagged]);
 
   return (
     <div

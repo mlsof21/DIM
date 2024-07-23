@@ -2,16 +2,19 @@
 
 .empty {
   width: var(--item-size);
-  height: calc(var(--item-size) + #{$badge-height} - #{$item-border-width});
+  height: var(--item-size);
   border: 1px solid #ddd;
   box-sizing: border-box;
+
+  &.hasBadge {
+    height: calc(var(--item-size) + #{$badge-height} - #{$item-border-width});
+  }
 }
 
 .placeholder {
   composes: item from global;
   opacity: 0.3;
   object-fit: contain;
-  filter: invert(1);
   width: 100%;
   height: 100%;
   padding: 12px;
@@ -20,7 +23,7 @@
 .clickable {
   composes: resetButton from '../../dim-ui/common.m.scss';
   &:focus {
-    border-color: $orange;
+    border-color: var(--theme-accent-primary);
   }
   .placeholder {
     &:hover {

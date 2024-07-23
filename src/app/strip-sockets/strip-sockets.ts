@@ -1,16 +1,15 @@
 import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
-import { tl } from 'app/i18next-t';
+import { I18nKey, tl } from 'app/i18next-t';
 import { canInsertPlug, insertPlug } from 'app/inventory/advanced-write-actions';
 import { DimItem, DimSocket, PluggableInventoryItemDefinition } from 'app/inventory/item-types';
-import { allItemsSelector } from 'app/inventory/selectors';
-import { manifestSelector } from 'app/manifest/selectors';
+import { isReducedModCostVariant } from 'app/loadout/mod-utils';
 import { DEFAULT_ORNAMENTS } from 'app/search/d2-known-values';
-import { RootState, ThunkResult } from 'app/store/types';
+import { ThunkResult } from 'app/store/types';
 import { CancelToken } from 'app/utils/cancel';
-import { uniqBy } from 'app/utils/util';
+import { uniqBy } from 'app/utils/collections';
+import { errorMessage } from 'app/utils/errors';
 import { Destiny2CoreSettings } from 'bungie-api-ts/core';
-import { BucketHashes, ItemCategoryHashes, PlugCategoryHashes } from 'data/d2/generated-enums';
-import { createSelector } from 'reselect';
+import { ItemCategoryHashes, PlugCategoryHashes } from 'data/d2/generated-enums';
 
 export interface StripAction {
   item: DimItem;
@@ -23,15 +22,14 @@ export type SocketKind =
   | 'shaders'
   | 'ornaments'
   | 'weaponmods'
-  | 'artifactmods'
   | 'armormods'
+  | 'discountedmods'
   | 'subclass'
   | 'others';
 
 function identifySocket(
   socket: DimSocket,
   plugDef: PluggableInventoryItemDefinition,
-  artifactMods: Set<number> | undefined
 ): SocketKind | undefined {
   if (plugDef.itemCategoryHashes?.includes(ItemCategoryHashes.Shaders)) {
     return 'shaders';
@@ -39,9 +37,10 @@ function identifySocket(
     return 'ornaments';
   } else if (plugDef.itemCategoryHashes?.includes(ItemCategoryHashes.WeaponModsDamage)) {
     return 'weaponmods';
-  } else if (artifactMods?.has(plugDef.hash)) {
-    return 'artifactmods';
   } else if (plugDef.itemCategoryHashes?.includes(ItemCategoryHashes.ArmorMods)) {
+    if (isReducedModCostVariant(plugDef.hash)) {
+      return 'discountedmods';
+    }
     return 'armormods';
   } else if (plugDef.plug.plugCategoryHash === PlugCategoryHashes.Hologram) {
     return 'others';
@@ -50,29 +49,14 @@ function identifySocket(
   // if they'd be useful, so they're intentionally left out here.
 }
 
-export const artifactModsSelector = createSelector(
-  manifestSelector,
-  (state: RootState) =>
-    allItemsSelector(state).find((i) => i.bucket.hash === BucketHashes.SeasonalArtifact)
-      ?.previewVendor,
-  (defs, vendorHash) => {
-    if (!defs?.isDestiny2()) {
-      return undefined;
-    }
-    const vendor = vendorHash && defs.Vendor.get(vendorHash);
-    return vendor ? new Set(vendor.itemList.map((i) => i.itemHash)) : undefined;
-  }
-);
-
 export function collectSocketsToStrip(
   filteredItems: DimItem[],
-  destiny2CoreSettings: Destiny2CoreSettings,
+  destiny2CoreSettings: Destiny2CoreSettings | undefined,
   defs: D2ManifestDefinitions,
-  artifactMods: Set<number> | undefined
 ) {
   const socketsByKind: {
     [kind in SocketKind]: {
-      name: string;
+      name: I18nKey;
       items?: StripAction[];
     };
   } = {
@@ -85,11 +69,11 @@ export function collectSocketsToStrip(
     weaponmods: {
       name: tl('StripSockets.WeaponMods'),
     },
-    artifactmods: {
-      name: tl('StripSockets.ArtifactMods'),
-    },
     armormods: {
       name: tl('StripSockets.ArmorMods'),
+    },
+    discountedmods: {
+      name: tl('StripSockets.DiscountedMods'),
     },
     subclass: {
       name: tl('StripSockets.Subclass'),
@@ -108,7 +92,7 @@ export function collectSocketsToStrip(
         canInsertPlug(socket, socket.emptyPlugItemHash, destiny2CoreSettings, defs)
       ) {
         const plugDef = socket.plugged.plugDef;
-        const kind = identifySocket(socket, plugDef, artifactMods);
+        const kind = identifySocket(socket, plugDef);
         if (kind) {
           (socketsByKind[kind].items ??= []).push({
             item,
@@ -139,7 +123,7 @@ export function collectSocketsToStrip(
       // show the current plug as a large icon for that button.
       // This immediately presents an example for what would happen if the user
       // decided to strip sockets of this kind.
-      const representativePlug = contents.items[contents.items.length - 1].plugItemDef;
+      const representativePlug = contents.items.at(-1)!.plugItemDef;
 
       socketKinds.push({
         kind: kind as SocketKind,
@@ -158,7 +142,7 @@ export function collectSocketsToStrip(
 export function doStripSockets(
   socketList: StripAction[],
   cancelToken: CancelToken,
-  progressCallback: (idx: number, errorMsg: string | undefined) => void
+  progressCallback: (idx: number, errorMsg: string | undefined) => void,
 ): ThunkResult {
   return async (dispatch) => {
     for (let i = 0; i < socketList.length; i++) {
@@ -168,12 +152,12 @@ export function doStripSockets(
 
       try {
         const socket = entry.item.sockets!.allSockets.find(
-          (i) => i.socketIndex === entry.socketIndex
+          (i) => i.socketIndex === entry.socketIndex,
         )!;
         await dispatch(insertPlug(entry.item, socket, socket.emptyPlugItemHash!));
         progressCallback(i, undefined);
       } catch (e) {
-        progressCallback(i, e.message ?? '???');
+        progressCallback(i, errorMessage(e));
       }
     }
   };

@@ -1,25 +1,29 @@
+import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
 import BungieImage from 'app/dim-ui/BungieImage';
-import { t } from 'app/i18next-t';
+import BucketIcon from 'app/dim-ui/svgs/BucketIcon';
+import { I18nKey, t, tl } from 'app/i18next-t';
 import { DimItem } from 'app/inventory/item-types';
 import { moveItemTo } from 'app/inventory/move-item';
 import { DimStore } from 'app/inventory/store-types';
-import { showItemPicker } from 'app/item-picker/item-picker';
+import { useItemPicker } from 'app/item-picker/item-picker';
 import { useD2Definitions } from 'app/manifest/selectors';
-import { itemCategoryIcons } from 'app/organizer/item-category-icons';
-import { addIcon, AppIcon } from 'app/shell/icons';
+import { AppIcon, addIcon } from 'app/shell/icons';
 import { ThunkDispatchProp } from 'app/store/types';
 import { chainComparator, compareBy, reverseComparator } from 'app/utils/comparators';
 import { itemCanBeEquippedBy } from 'app/utils/item-utils';
+import { LookupTable, isIn } from 'app/utils/util-types';
+import { DestinyDisplayPropertiesDefinition } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
-import pursuitsInfoFile from 'data/d2/pursuits.json';
+import { TraitHashes } from 'data/d2/generated-enums';
 import grenade from 'destiny-icons/weapons/grenade.svg';
 import headshot from 'destiny-icons/weapons/headshot.svg';
 import melee from 'destiny-icons/weapons/melee.svg';
 import React from 'react';
 import { useDispatch } from 'react-redux';
 import styles from './BountyGuide.m.scss';
+import { xpItems } from './xp';
 
-enum KillType {
+const enum KillType {
   Melee,
   Super,
   Grenade,
@@ -27,21 +31,49 @@ enum KillType {
   Precision,
   ClassAbilities,
 }
-const killTypeIcons: { [key in KillType]: string | undefined } = {
+const killTypeIcons: LookupTable<KillType, string> = {
   [KillType.Melee]: melee,
-  [KillType.Super]: undefined,
   [KillType.Grenade]: grenade,
-  [KillType.Finisher]: undefined,
   [KillType.Precision]: headshot,
-  [KillType.ClassAbilities]: undefined,
-} as const;
+};
 
-export type DefType = 'ActivityMode' | 'Destination' | 'DamageType' | 'ItemCategory' | 'KillType';
+const killTypeDescriptions: Record<KillType, I18nKey> = {
+  [KillType.Melee]: tl('KillType.Melee'),
+  [KillType.Super]: tl('KillType.Super'),
+  [KillType.Grenade]: tl('KillType.Grenade'),
+  [KillType.Finisher]: tl('KillType.Finisher'),
+  [KillType.Precision]: tl('KillType.Precision'),
+  [KillType.ClassAbilities]: tl('KillType.ClassAbilities'),
+};
 
-export type BountyFilter = {
+export type DefType =
+  | 'ActivityMode'
+  | 'Destination'
+  | 'DamageType'
+  | 'ItemCategory'
+  | 'KillType'
+  | 'Reward'
+  | 'QuestTrait';
+
+const pursuitCategoryTraitHashes: TraitHashes[] = [
+  TraitHashes.Seasonal_Quests,
+  TraitHashes.TheFinalShape,
+  TraitHashes.Exotics,
+  TraitHashes.Playlists,
+  TraitHashes.ThePast,
+];
+
+// Reward types we'll show in the bounty guide. Could be expanded (e.g. to seasonal mats)
+const rewardAllowList = [
+  ...Object.keys(xpItems).map((i) => parseInt(i, 10)),
+  2817410917, // InventoryItem "Bright Dust"
+  3168101969, // InventoryItem "Bright Dust"
+];
+
+export interface BountyFilter {
   type: DefType;
   hash: number;
-};
+}
 
 /**
  * This provides a little visual guide to what bounties you have - specifically, what weapons/activities/locations are required for your bounties.
@@ -53,34 +85,34 @@ export default function BountyGuide({
   bounties,
   selectedFilters,
   onSelectedFiltersChanged,
-  skipTypes,
-  pursuitsInfo = pursuitsInfoFile,
+  pursuitsInfo,
 }: {
   store: DimStore;
   bounties: DimItem[];
   selectedFilters: BountyFilter[];
-  onSelectedFiltersChanged(filters: BountyFilter[]): void;
-  skipTypes?: DefType[]; // Filter to show only specific bounty types
-  pursuitsInfo?: { [hash: string]: { [type in DefType]?: number[] } };
+  onSelectedFiltersChanged: (filters: BountyFilter[]) => void;
+  pursuitsInfo: { [hash: string]: { [type in DefType]?: number[] } };
 }) {
   const defs = useD2Definitions()!;
   const dispatch = useDispatch<ThunkDispatchProp['dispatch']>();
+  const showItemPicker = useItemPicker();
 
   const pullItemCategory = async (e: React.MouseEvent, itemCategory: number) => {
     e.stopPropagation();
-    try {
-      const bucket = defs.ItemCategory.get(itemCategory)?.displayProperties.name;
-      const { item } = await showItemPicker({
-        filterItems: (item) =>
-          item.itemCategoryHashes.includes(itemCategory) && itemCanBeEquippedBy(item, store),
-        prompt: t('MovePopup.PullItem', {
-          bucket,
-          store: store.name,
-        }),
-      });
 
+    const bucket = defs.ItemCategory.get(itemCategory)?.displayProperties.name;
+    const item = await showItemPicker({
+      filterItems: (item) =>
+        item.itemCategoryHashes.includes(itemCategory) && itemCanBeEquippedBy(item, store),
+      prompt: t('MovePopup.PullItem', {
+        bucket,
+        store: store.name,
+      }),
+    });
+
+    if (item) {
       await dispatch(moveItemTo(item, store));
-    } catch (e) {}
+    }
   };
 
   const mapped: { [type in DefType]: { [key: number]: DimItem[] } } = {
@@ -89,32 +121,53 @@ export default function BountyGuide({
     DamageType: {},
     ItemCategory: {},
     KillType: {},
+    Reward: {},
+    QuestTrait: {},
   };
   for (const i of bounties) {
-    const expired = i.pursuit?.expirationDate
-      ? i.pursuit.expirationDate.getTime() < Date.now()
+    const expired = i.pursuit?.expiration
+      ? i.pursuit.expiration.expirationDate.getTime() < Date.now()
       : false;
     if (!i.complete && !expired) {
       const info = pursuitsInfo[i.hash];
       if (info) {
         for (const key in info) {
-          for (const value of info[key]) {
-            mapped[key][value] ||= [];
-            mapped[key][value].push(i);
+          const infoKey = key as keyof typeof info;
+          const values = info[infoKey];
+          if (values) {
+            for (const value of values) {
+              (mapped[infoKey][value] ??= []).push(i);
+            }
+          }
+        }
+      }
+      if (i.pursuit) {
+        for (const reward of i.pursuit.rewards) {
+          if (rewardAllowList.includes(reward.itemHash)) {
+            (mapped.Reward[reward.itemHash] ??= []).push(i);
+          }
+        }
+      }
+      // Don't look up InventoryItem for "items" that were created from Records.
+      if (!i.pursuit?.recordHash) {
+        const traitHashes = defs.InventoryItem.get(i.hash)?.traitHashes;
+        if (traitHashes) {
+          for (const traitHash of traitHashes) {
+            if (pursuitCategoryTraitHashes.includes(traitHash)) {
+              (mapped.QuestTrait[traitHash] ??= []).push(i);
+            }
           }
         }
       }
     }
   }
 
-  const flattened: { type: DefType; value: number; bounties: DimItem[] }[] = Object.entries(
-    mapped
-  ).flatMap(([type, mapping]: [DefType, { [key: number]: DimItem[] }]) =>
+  const flattened = Object.entries(mapped).flatMap(([type, mapping]) =>
     Object.entries(mapping).map(([value, bounties]) => ({
-      type,
+      type: type as DefType,
       value: parseInt(value, 10),
       bounties,
-    }))
+    })),
   );
 
   if (flattened.length === 0) {
@@ -147,102 +200,94 @@ export default function BountyGuide({
 
   return (
     <div className={styles.guide} onClick={clearSelection}>
-      {flattened.map(
-        ({ type, value, bounties }) =>
-          !skipTypes?.includes(type) && (
-            <div
-              key={type + value}
-              className={clsx(styles.pill, {
-                [styles.selected]: matchPill(type, value, selectedFilters),
-                // Show "synergy" when this category contains at least one bounty that overlaps with at least one of the selected filters
-                [styles.synergy]:
-                  selectedFilters.length > 0 &&
-                  bounties.some((i) => matchBountyFilters(i, selectedFilters, pursuitsInfo)),
-              })}
-              onClick={(e) => onClickPill(e, type, value)}
+      {flattened.map(({ type, value, bounties }) => (
+        <button
+          type="button"
+          key={type + value}
+          className={clsx(styles.pill, {
+            [styles.selected]: matchPill(type, value, selectedFilters),
+            // Show "synergy" when this category contains at least one bounty that overlaps with at least one of the selected filters
+            [styles.synergy]:
+              selectedFilters.length > 0 &&
+              bounties.some((i) => matchBountyFilters(defs, i, selectedFilters, pursuitsInfo)),
+          })}
+          onClick={(e) => onClickPill(e, type, value)}
+        >
+          <PillContent defs={defs} type={type} value={value} />
+          <span className={styles.count}>({bounties.length})</span>
+          {type === 'ItemCategory' && (
+            <span
+              className={styles.pullItem}
+              onClick={(e) => {
+                pullItemCategory(e, value);
+              }}
             >
-              {(() => {
-                switch (type) {
-                  case 'ActivityMode':
-                    return (
-                      <>
-                        {defs.ActivityMode[value].displayProperties.hasIcon && (
-                          <BungieImage
-                            height="16"
-                            src={defs.ActivityMode[value].displayProperties.icon}
-                          />
-                        )}
-                        {defs.ActivityMode[value].displayProperties.name}
-                      </>
-                    );
-                  case 'Destination':
-                    return (
-                      <>
-                        {defs.Destination.get(value).displayProperties.hasIcon && (
-                          <BungieImage
-                            height="16"
-                            src={defs.Destination.get(value).displayProperties.icon}
-                          />
-                        )}
-                        {defs.Destination.get(value)?.displayProperties.name}
-                      </>
-                    );
-                  case 'DamageType':
-                    return (
-                      <>
-                        {defs.DamageType.get(value).displayProperties.hasIcon && (
-                          <BungieImage
-                            height="16"
-                            src={defs.DamageType.get(value).displayProperties.icon}
-                          />
-                        )}
-                        {defs.DamageType.get(value)?.displayProperties.name}
-                      </>
-                    );
-                  case 'ItemCategory':
-                    return (
-                      <>
-                        {itemCategoryIcons[value] && (
-                          <img
-                            className={styles.itemCategoryIcon}
-                            height="16"
-                            src={itemCategoryIcons[value]}
-                          />
-                        )}
-                        {defs.ItemCategory.get(value)?.displayProperties.name}
-                      </>
-                    );
-                  case 'KillType':
-                    return (
-                      <>
-                        {killTypeIcons[value] && (
-                          <img
-                            className={styles.itemCategoryIcon}
-                            height="16"
-                            src={killTypeIcons[value]}
-                          />
-                        )}
-                        {KillType[value]}
-                      </>
-                    );
-                }
-              })()}
-              <span className={styles.count}>({bounties.length})</span>
-              {type === 'ItemCategory' && (
-                <span
-                  className={styles.pullItem}
-                  onClick={(e) => {
-                    pullItemCategory(e, value);
-                  }}
-                >
-                  <AppIcon icon={addIcon} />
-                </span>
-              )}
-            </div>
-          )
-      )}
+              <AppIcon icon={addIcon} />
+            </span>
+          )}
+        </button>
+      ))}
     </div>
   );
+}
+
+function contentFromDisplayProperties(
+  {
+    displayProperties,
+  }: {
+    displayProperties: DestinyDisplayPropertiesDefinition;
+  },
+  hideIcon?: boolean,
+) {
+  return (
+    <>
+      {displayProperties.hasIcon && !hideIcon && (
+        <BungieImage height="16" src={displayProperties.icon} />
+      )}
+      {displayProperties.name}
+    </>
+  );
+}
+
+function PillContent({
+  type,
+  defs,
+  value,
+}: {
+  type: DefType;
+  defs: D2ManifestDefinitions;
+  value: number;
+}) {
+  switch (type) {
+    case 'ActivityMode':
+    case 'Destination':
+    case 'DamageType':
+      return contentFromDisplayProperties(defs[type].get(value));
+    case 'ItemCategory':
+      return (
+        <>
+          <BucketIcon itemCategoryHash={value} height="16" />
+          {defs.ItemCategory.get(value)?.displayProperties.name}
+        </>
+      );
+    case 'KillType':
+      return (
+        <>
+          {isIn(value, killTypeIcons) && (
+            <img className={styles.invert} height="16" src={killTypeIcons[value]} />
+          )}
+          {t(killTypeDescriptions[value as KillType])}
+        </>
+      );
+    case 'Reward':
+      return contentFromDisplayProperties(defs.InventoryItem.get(value));
+    case 'QuestTrait':
+      return contentFromDisplayProperties(
+        defs.Trait.get(value),
+        // the seasonal quest trait has the Season of the Lost icon?
+        /* hideIcon */ value === TraitHashes.Seasonal_Quests,
+      );
+  }
 }
 
 function matchPill(type: DefType, hash: number, filters: BountyFilter[]) {
@@ -253,20 +298,24 @@ function matchPill(type: DefType, hash: number, filters: BountyFilter[]) {
  * Returns true if the filter list is empty, or if the item matches *any* of the provided filters ("or").
  */
 export function matchBountyFilters(
+  defs: D2ManifestDefinitions,
   item: DimItem,
   filters: BountyFilter[],
-  pursuitsInfo: { [hash: string]: { [type in DefType]?: number[] } } = pursuitsInfoFile
+  pursuitsInfo: { [hash: string]: { [type in DefType]?: number[] } },
 ) {
   if (filters.length === 0) {
     return true;
   }
   const info = pursuitsInfo[item.hash];
-  if (info) {
-    for (const filter of filters) {
-      if (info[filter.type]?.includes(filter.hash)) {
-        return true;
-      }
+  for (const filter of filters) {
+    if (filter.type === 'Reward') {
+      return item.pursuit?.rewards.some((r) => r.itemHash === filter.hash);
+    } else if (filter.type === 'QuestTrait') {
+      return defs.InventoryItem.get(item.hash)?.traitHashes?.includes(filter.hash);
+    } else if (info?.[filter.type]?.includes(filter.hash)) {
+      return true;
     }
   }
+
   return false;
 }

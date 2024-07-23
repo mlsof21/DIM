@@ -1,5 +1,7 @@
+@use '../variables.scss' as *;
+
 .accountSelect {
-  color: white;
+  color: var(--theme-text);
   height: auto;
   flex: 1 0 auto;
   display: flex;
@@ -9,10 +11,32 @@
 
   a {
     text-decoration: none;
+    > div {
+      padding: 10px 2rem 10px 1rem;
+
+      &:hover,
+      &:focus {
+        color: var(--theme-text-invert);
+        background-color: var(--theme-accent-primary);
+      }
+    }
   }
 }
 
 .logout {
   composes: account from './Account.m.scss';
-  margin-top: 20px;
+  composes: resetButton from '../dim-ui/common.m.scss';
+  text-align: left;
+  padding: 10px 2rem 10px 1rem;
+
+  :global(.app-icon) {
+    margin: 0;
+  }
+}
+
+.accountName {
+  all: initial;
+  font: inherit;
+  font-size: 12px;
+  color: var(--theme-text-secondary);
 }

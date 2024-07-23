@@ -5,7 +5,10 @@ export class Store {
   private readonly _storeName: string;
   private _dbp: Promise<IDBDatabase> | undefined;
 
-  constructor(dbName = 'keyval-store', readonly storeName = 'keyval') {
+  constructor(
+    dbName = 'keyval-store',
+    readonly storeName = 'keyval',
+  ) {
     this._dbName = dbName;
     this._storeName = storeName;
   }
@@ -16,7 +19,7 @@ export class Store {
     }
     this._dbp = new Promise<IDBDatabase>((resolve, reject) => {
       const openreq = indexedDB.open(this._dbName, 1);
-      openreq.onerror = () => reject(openreq.error);
+      openreq.onerror = () => reject(openreq.error ?? new Error('IDB open error'));
       openreq.onsuccess = () => resolve(openreq.result);
 
       // First time setup: create an empty object store
@@ -34,7 +37,7 @@ export class Store {
 
   _withIDBStore(
     type: IDBTransactionMode,
-    callback: (store: IDBObjectStore) => void
+    callback: (store: IDBObjectStore) => void,
   ): Promise<void> {
     this._init();
     return this._dbp!.then(
@@ -42,9 +45,12 @@ export class Store {
         new Promise<void>((resolve, reject) => {
           const transaction = db.transaction(this.storeName, type);
           transaction.oncomplete = () => resolve();
-          transaction.onabort = transaction.onerror = () => reject(transaction.error);
+          // Safari sometimes just rejects with null
+          transaction.onerror = (e) =>
+            reject((e.target as IDBTransaction).error ?? new Error('IDB unknown error'));
+          transaction.onabort = () => reject(transaction.error ?? new Error('IDB aborted'));
           callback(transaction.objectStore(this.storeName));
-        })
+        }),
     );
   }
 
@@ -60,7 +66,7 @@ export class Store {
     this._close();
     return new Promise((resolve, reject) => {
       const deletereq = indexedDB.deleteDatabase(this._dbName);
-      deletereq.onerror = () => reject(deletereq.error);
+      deletereq.onerror = () => reject(deletereq.error ?? new Error('IDB delete error'));
       deletereq.onsuccess = () => resolve();
     });
   }
@@ -76,10 +82,10 @@ function getDefaultStore() {
 }
 
 export function get<Type>(key: IDBValidKey, store = getDefaultStore()): Promise<Type> {
-  let req: IDBRequest;
+  let req: IDBRequest<Type>;
   return store
     ._withIDBStore('readonly', (store) => {
-      req = store.get(key);
+      req = store.get(key) as IDBRequest<Type>;
     })
     .then(() => req.result);
 }

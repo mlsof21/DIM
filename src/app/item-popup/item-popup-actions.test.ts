@@ -1,6 +1,5 @@
 import { DimItem } from 'app/inventory/item-types';
 import { DimStore } from 'app/inventory/store-types';
-import 'cross-fetch/polyfill';
 import { BucketHashes } from 'data/d2/generated-enums';
 import { getTestStores } from 'testing/test-utils';
 import { buildItemActionsModel, ItemActionsModel } from './item-popup-actions';
@@ -28,7 +27,7 @@ function getTestActions(itemPredicate: (item: DimItem) => boolean): [DimItem, It
 it('handles an equipped item', async () => {
   // Grab the equipped kinetic weapon
   const [_item, actions] = getTestActions(
-    (i) => i.equipped && i.location.hash === BucketHashes.KineticWeapons
+    (i) => i.equipped && i.location.hash === BucketHashes.KineticWeapons,
   );
 
   expect(actions.hasMoveControls).toBe(true);

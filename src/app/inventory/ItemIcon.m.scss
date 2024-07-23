@@ -13,10 +13,11 @@ $commonBg: #366f42;
   width: var(--item-size);
   height: var(--item-size);
   box-sizing: border-box;
-  border: $item-border-width solid #ddd;
+  border: $item-border-width solid var(--theme-item-polaroid);
   background-size: contain;
   background-position: center;
   background-repeat: no-repeat;
+  pointer-events: none;
   &:focus {
     outline: none;
   }
@@ -45,7 +46,7 @@ $commonBg: #366f42;
 
 // Alternate border styles
 .masterwork {
-  border-color: $masterwork-border-color;
+  border-color: var(--theme-item-polaroid-masterwork);
 }
 .deepsight {
   border-color: $deepsight-border-color;
@@ -53,7 +54,7 @@ $commonBg: #366f42;
 
 // Completed items or capped stackables image
 .complete {
-  border-color: $gold;
+  border-color: var(--theme-item-polaroid-capped);
 }
 
 // Engrams and packages
@@ -61,37 +62,164 @@ $commonBg: #366f42;
   border-color: transparent;
 }
 
-// The overlay image for masterworks and Deepsight weapons
 .backgroundOverlay {
-  // -0.4px to force the browser round down rendered value not the actual value
-  // If it rounds up that leaves a 1px gap between the image and the border
-  $new-border-width: $item-border-width - 0.4px;
-
-  box-sizing: border-box;
-  top: $new-border-width;
-  left: $new-border-width;
-  border-width: 0;
-  height: calc(var(--item-size) - #{2 * $new-border-width});
-  width: calc(var(--item-size) - #{2 * $new-border-width});
   position: absolute;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: calc((var(--item-size) - #{2 * $new-border-width}) * (96 / 90))
-    calc((var(--item-size) - #{2 * $new-border-width}) * (96 / 90));
+  box-sizing: border-box;
+  height: calc(var(--item-size) - ($item-border-width * 2));
+  width: calc(var(--item-size) - ($item-border-width * 2));
+  top: $item-border-width;
+  left: $item-border-width;
 }
+
+// Masterwork pattern emulating .src/images/masterwork.png
+$rgb-masterworked: dim-hex-to-rgb-values($stat-masterworked);
 .legendaryMasterwork {
-  background-image: url('../../images/masterwork.png');
+  box-shadow: inset 0 0 1px 0 rgba(0, 0, 0, 0.25);
+  background-image: radial-gradient(
+      ellipse at bottom,
+      dim-rgb-values-to-rgba($rgb-masterworked, $alpha: 0.2),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse at bottom,
+      dim-rgb-values-to-rgba($rgb-masterworked, $alpha: 0.1),
+      transparent 75%
+    );
+  background-size:
+    125% 30%,
+    50% 50%;
+  background-repeat: no-repeat;
+  background-position: bottom;
 }
+
+.shinyMasterwork {
+  $shiny-stripe-color: #d0b343;
+
+  // look-defining percentages
+  $initial-offset: 69; // left edge of the leftmost stripe
+  $final-offset: 98.5; // right edge of the rightmost stripe
+  $stripe-width: 2.6; // obvious
+  $fuzz: 1.2; // determines blurriness level of stripe edges
+
+  // math
+  $effective-fuzz: math.div($fuzz, 100);
+  $occupied-space: $final-offset - $initial-offset;
+  $stripe-spacing: math.div($occupied-space - (4 * $stripe-width), 3);
+
+  $stripe-1-start: math.div(($initial-offset + ($stripe-width * 0) + ($stripe-spacing * 0)), 100);
+  $stripe-1-ended: math.div(($initial-offset + ($stripe-width * 1) + ($stripe-spacing * 0)), 100);
+
+  $stripe-2-start: math.div(($initial-offset + ($stripe-width * 1) + ($stripe-spacing * 1)), 100);
+  $stripe-2-ended: math.div(($initial-offset + ($stripe-width * 2) + ($stripe-spacing * 1)), 100);
+
+  $stripe-3-start: math.div(($initial-offset + ($stripe-width * 2) + ($stripe-spacing * 2)), 100);
+  $stripe-3-ended: math.div(($initial-offset + ($stripe-width * 3) + ($stripe-spacing * 2)), 100);
+
+  $stripe-4-start: math.div(($initial-offset + ($stripe-width * 3) + ($stripe-spacing * 3)), 100);
+  $stripe-4-ended: math.div(($initial-offset + ($stripe-width * 4) + ($stripe-spacing * 3)), 100);
+
+  opacity: 0.4;
+  left: 1.5px;
+  filter: drop-shadow(0 0 2px #e8a534);
+  background-image: radial-gradient(
+      ellipse at bottom,
+      dim-rgb-values-to-rgba($rgb-masterworked, $alpha: 0.2),
+      transparent 75%
+    ),
+    radial-gradient(
+      ellipse at bottom,
+      dim-rgb-values-to-rgba($rgb-masterworked, $alpha: 0.1),
+      transparent 75%
+    ),
+    linear-gradient(
+      135deg,
+      transparent #{math.percentage($stripe-1-start)},
+      #{$shiny-stripe-color} #{math.percentage($stripe-1-start + $effective-fuzz)},
+
+      #{$shiny-stripe-color} #{math.percentage($stripe-1-ended)},
+      transparent #{math.percentage($stripe-1-ended + $effective-fuzz)},
+
+      transparent #{math.percentage($stripe-2-start)},
+      #{$shiny-stripe-color} #{math.percentage($stripe-2-start + $effective-fuzz)},
+
+      #{$shiny-stripe-color} #{math.percentage($stripe-2-ended)},
+      transparent #{math.percentage($stripe-2-ended + $effective-fuzz)},
+
+      transparent #{math.percentage($stripe-3-start)},
+      #{$shiny-stripe-color} #{math.percentage($stripe-3-start + $effective-fuzz)},
+
+      #{$shiny-stripe-color} #{math.percentage($stripe-3-ended)},
+      transparent #{math.percentage($stripe-3-ended + $effective-fuzz)},
+
+      transparent #{math.percentage($stripe-4-start)},
+      #{$shiny-stripe-color} #{math.percentage($stripe-4-start + $effective-fuzz)},
+
+      #{$shiny-stripe-color} #{math.percentage($stripe-4-ended)},
+      transparent #{math.percentage($stripe-4-ended + $effective-fuzz)}
+    );
+  background-size:
+    125% 30%,
+    50% 50%,
+    100% 100%;
+  background-repeat: no-repeat;
+  background-position: bottom;
+}
+
+// Exotic Masterwork pattern emulating .src/images/exotic-masterwork.png
 .exoticMasterwork {
-  background-image: url('../../images/exotic-masterwork.png');
+  $light-stripe: rgba(255, 255, 255, 0.003);
+  $dark-stripe: rgba(0, 0, 0, 0.025);
+  box-shadow: inset 0 0 1px 1px rgba(0, 0, 0, 0.15);
+  background:
+    linear-gradient(rgba(0, 0, 0, 0.3) 0%, transparent 20%),
+    radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.225), transparent 75%) center
+      bottom,
+    radial-gradient(ellipse at center bottom, rgba(255, 255, 255, 0.15), transparent 75%) center
+      bottom,
+    repeating-linear-gradient(
+        to bottom right,
+        #{$light-stripe} 0%,
+        #{$light-stripe} 5%,
+        #{$dark-stripe} 5%,
+        #{$dark-stripe} 12.5%
+      )
+      bottom right,
+    repeating-linear-gradient(
+        to bottom left,
+        #{$light-stripe} 0%,
+        #{$light-stripe} 5%,
+        #{$dark-stripe} 5%,
+        #{$dark-stripe} 12.5%
+      )
+      bottom left,
+    repeating-linear-gradient(
+        to top left,
+        #{$light-stripe} 0%,
+        #{$light-stripe} 5%,
+        #{$dark-stripe} 5%,
+        #{$dark-stripe} 12.5%
+      )
+      top left,
+    repeating-linear-gradient(
+        to top right,
+        #{$light-stripe} 0%,
+        #{$light-stripe} 5%,
+        #{$dark-stripe} 5%,
+        #{$dark-stripe} 12.5%
+      )
+      top right;
+  background-repeat: no-repeat;
+  background-size:
+    100%,
+    125% 30%,
+    50% 50%,
+    50% 50%,
+    50% 50%,
+    50% 50%,
+    50% 50%;
 }
 .deepsightBorder {
   border: 2px solid $deepsight-border-color;
-  // background-image: url('../../images/deepsight.png');
-
-  &.legendaryMasterwork {
-    background-image: url('../../images/masterwork.png');
-  }
 }
 
 .iconOverlay {
@@ -101,14 +229,12 @@ $commonBg: #366f42;
   width: calc(var(--item-size) - #{2 * $item-border-width});
   background-size: contain;
   position: absolute;
+  pointer-events: none;
 }
 
 .energyCostOverlay {
   position: absolute;
-  top: $item-border-width;
-  bottom: $item-border-width;
-  right: $item-border-width;
-  left: $item-border-width;
+  inset: $item-border-width $item-border-width $item-border-width $item-border-width;
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -117,10 +243,7 @@ $commonBg: #366f42;
 
 .energyCost {
   position: absolute;
-  top: $item-border-width;
-  bottom: $item-border-width;
-  right: $item-border-width;
-  left: $item-border-width;
+  inset: $item-border-width $item-border-width $item-border-width $item-border-width;
   pointer-events: none;
 
   > text {
@@ -135,36 +258,14 @@ $commonBg: #366f42;
   height: calc((var(--item-size) + 1px) / 2) !important;
   right: 0;
   top: calc(var(--item-size) - ((var(--item-size) + 1px) / 2) - 1px);
+  // Seems to fix https://github.com/DestinyItemManager/DIM/issues/7974
   pointer-events: none;
 }
 
-.deepsightPattern {
-  $size: 12;
-  position: absolute;
-  display: block;
-  width: 0;
-  height: 0;
-  border: calc(var(--item-size) * #{math.div($size, 100)}) solid $deepsight-border-color;
-  border-top-color: transparent;
-  border-left-color: transparent;
-  right: 0;
-  top: calc(var(--item-size) - (var(--item-size) * #{math.div($size, 50)}) - 1px);
-  pointer-events: none;
-}
-
-.bucketIcon {
-  filter: invert(1);
+.inverted {
   border-color: #222;
 }
 
-.solarColorFilter {
-  filter: hue-rotate(148deg) grayscale(0.1) saturate(0.8);
-}
-
-.arcColorFilter {
-  filter: hue-rotate(307deg) brightness(2) grayscale(0.5) saturate(0.9);
-}
-
-.transparencyFix {
-  background-color: black;
+.strandColorFix {
+  filter: hue-rotate(265deg) brightness(1.3);
 }

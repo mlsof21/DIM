@@ -1,38 +1,38 @@
-import { AssumeArmorMasterwork, LockArmorEnergyType } from '@destinyitemmanager/dim-api-types';
+import { AssumeArmorMasterwork } from '@destinyitemmanager/dim-api-types';
 import { DimItem } from 'app/inventory/item-types';
 import { ArmorEnergyRules } from 'app/loadout-builder/types';
+import { isArtifice } from 'app/utils/item-utils';
 
-/** Gets the max energy allowed from the passed in UpgradeSpendTier */
+/**
+ * Gets the max energy we can use on this item, based on its current energy
+ * level and the passed in ArmorEnergyRules that allow us to pretend the item
+ * has more energy.
+ */
 export function calculateAssumedItemEnergy(
   item: DimItem,
-  { assumeArmorMasterwork, minItemEnergy }: ArmorEnergyRules
+  { assumeArmorMasterwork, minItemEnergy }: ArmorEnergyRules,
 ) {
-  const itemEnergy = item.energy?.energyCapacity || minItemEnergy;
+  if (!item.energy) {
+    return 0;
+  }
+  const itemEnergy = item.energy.energyCapacity;
   const assumedEnergy =
     assumeArmorMasterwork === AssumeArmorMasterwork.All ||
+    assumeArmorMasterwork === AssumeArmorMasterwork.ArtificeExotic ||
     (assumeArmorMasterwork === AssumeArmorMasterwork.Legendary && !item.isExotic)
       ? 10
       : minItemEnergy;
   return Math.max(itemEnergy, assumedEnergy);
 }
 
-export function isArmorEnergyLocked(
-  item: DimItem,
-  { lockArmorEnergyType, loadouts }: ArmorEnergyRules
-) {
-  switch (lockArmorEnergyType) {
-    default:
-    case LockArmorEnergyType.None: {
-      return false;
-    }
-    case LockArmorEnergyType.Masterworked: {
-      const { loadoutsByItem, optimizingLoadoutId } = loadouts!;
-      return loadoutsByItem[item.id]?.some(
-        (l) => l.loadoutItem.equip && l.loadout.id !== optimizingLoadoutId
-      );
-    }
-    case LockArmorEnergyType.All: {
-      return true;
-    }
-  }
+/**
+ * as of TFS, [relevant, modern] exotics can use artifice stat mods, if the user pays to enhance the armor
+ */
+export function isAssumedArtifice(item: DimItem, { assumeArmorMasterwork }: ArmorEnergyRules) {
+  return (
+    (item.isExotic &&
+      item.energy &&
+      assumeArmorMasterwork === AssumeArmorMasterwork.ArtificeExotic) ||
+    isArtifice(item)
+  );
 }

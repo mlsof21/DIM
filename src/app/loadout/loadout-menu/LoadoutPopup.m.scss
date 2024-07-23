@@ -1,54 +1,24 @@
 @use '../../variables.scss' as *;
 
-// Used in StoreHeading.tsx
-:global(.loadout-menu) {
-  position: absolute;
-  width: 300px;
-  box-sizing: border-box;
-  max-height: calc(var(--viewport-height) - var(--header-height) - #{62px + 16px});
-  overflow: auto;
-  z-index: 2;
-  color: rgba(245, 245, 245, 0.6);
-  overscroll-behavior: contain;
-  cursor: pointer;
-  background-color: black;
-
-  @include visible-scrollbars;
-
-  [role='button'] {
-    outline: none;
-  }
-
-  // The phone layout version
-  :global(.detached) & {
-    position: fixed;
-    top: calc(54px + var(--header-height));
-    z-index: 1000;
-    width: 100vw;
-    padding: 0;
-    max-height: calc(
-      var(--viewport-height) - 54px - var(--header-height) - env(safe-area-inset-bottom)
-    );
-  }
-}
-
 .list {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+.note {
+  color: var(--theme-text-secondary);
+}
+
 .menuItem {
   display: flex;
   flex-direction: row;
   padding-left: 0;
-  overflow: hidden;
-  background-color: black;
   cursor: pointer;
 
   @include phone-portrait {
     font-size: 14px;
-    padding: 6px;
+    padding: 2px 0;
   }
 
   &:last-of-type {
@@ -67,8 +37,8 @@
   }
 
   > span,
-  a,
-  form {
+  > a,
+  > form {
     &:first-child {
       flex: 1;
       padding: 0 10px;
@@ -76,44 +46,52 @@
       text-overflow: ellipsis;
       white-space: nowrap !important;
       line-height: 35px;
-      :global(.app-icon),
-      img {
+      display: inline-flex;
+      align-items: center;
+      > :global(.app-icon),
+      > img {
         width: 12px;
         margin-right: 5px;
         text-align: center;
+
         @include phone-portrait {
           width: 14px;
           margin-right: 8px;
         }
       }
-      > img:first-child {
+      > img {
         filter: invert(1);
       }
     }
-  }
 
-  input[type='text'] {
-    border: none;
-    color: white;
-    outline: none;
-    flex: 1;
-    width: 0;
-    padding: 7px;
-    margin-left: 4px;
-    background: #313233;
-    border-radius: 4px;
-    box-sizing: border-box;
+    .fashionIcon {
+      height: 20px !important;
+      width: 20px !important;
+      margin-right: 5px;
+    }
+    .modificationIcon {
+      height: 18px !important;
+      width: 18px !important;
+    }
   }
 
   &:hover,
   a:hover {
-    background-color: $orange;
-    color: black !important;
+    background-color: var(--theme-accent-primary);
+    color: var(--theme-text-invert) !important;
     > span:first-child > :global(.app-icon) {
-      color: black !important;
+      color: var(--theme-text-invert) !important;
     }
-    > span:first-child > img:first-child {
+    > span:first-child > img:first-child,
+    .modificationIcon {
       filter: none;
+    }
+    .fashionIcon {
+      filter: invert(1);
+    }
+
+    .note {
+      color: var(--theme-text-invert);
     }
   }
 
@@ -123,6 +101,7 @@
     display: flex;
     align-items: center;
     text-align: center;
+
     @include phone-portrait {
       margin: 4px 4px 4px 2px;
     }
@@ -136,18 +115,19 @@
   /* stylelint-disable-next-line no-descending-specificity */
   :global(.app-icon) {
     font-size: 13px;
+
     @include phone-portrait {
       font-size: 15px;
     }
   }
   &:hover {
-    background-color: $blue;
+    background-color: var(--theme-accent-secondary);
     color: #222;
   }
 }
 
 .loadoutTypeIcon {
-  color: #999;
+  color: var(--theme-text);
 }
 
 .warningIcon {
@@ -155,10 +135,40 @@
 }
 
 .content {
-  background-color: #3a4150;
-  color: #e4e4e4;
+  color: var(--theme-text);
+
+  // This is nested so its specificity is high enough to override the defaults
+  .filterPills {
+    margin-left: 8px;
+    margin-right: 8px;
+  }
 }
 
-.note {
-  color: #888;
+.filterInput {
+  composes: search-filter from global;
+  min-width: unset;
+  margin: 8px;
+}
+
+.inGameLoadouts {
+  list-style: none;
+  margin: 0 8px;
+  padding: 4px 0;
+
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(6, 1fr);
+  place-items: flex-start;
+  &.moreLoadouts {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.inGameLoadoutButton {
+  composes: resetButton from '../../dim-ui/common.m.scss';
+  &:hover,
+  &:focus-visible {
+    outline: 2px solid var(--theme-accent-primary);
+  }
+  display: block;
 }

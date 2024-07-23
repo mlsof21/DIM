@@ -2,14 +2,16 @@ import { destinyVersionSelector } from 'app/accounts/selectors';
 import { StatInfo } from 'app/compare/Compare';
 import { settingSelector } from 'app/dim-api/selectors';
 import UserGuideLink from 'app/dim-ui/UserGuideLink';
+import useBulkNote from 'app/dim-ui/useBulkNote';
+import useConfirm from 'app/dim-ui/useConfirm';
 import { t, tl } from 'app/i18next-t';
-import { setNote } from 'app/inventory/actions';
 import { bulkLockItems, bulkTagItems } from 'app/inventory/bulk-actions';
-import { TagInfo } from 'app/inventory/dim-item-info';
 import { DimItem } from 'app/inventory/item-types';
 import {
   allItemsSelector,
-  itemInfosSelector,
+  createItemContextSelector,
+  getNotesSelector,
+  getTagSelector,
   newItemsSelector,
   storesSelector,
 } from 'app/inventory/selectors';
@@ -21,9 +23,10 @@ import {
 } from 'app/inventory/store/override-sockets';
 import { applyLoadout } from 'app/loadout-drawer/loadout-apply';
 import { convertToLoadoutItem, newLoadout } from 'app/loadout-drawer/loadout-utils';
-import { loadoutsByItemSelector } from 'app/loadout-drawer/selectors';
+import { loadoutsByItemSelector } from 'app/loadout/selectors';
 import { useD2Definitions } from 'app/manifest/selectors';
-import { searchFilterSelector } from 'app/search/search-filter';
+import { showNotification } from 'app/notifications/notifications';
+import { searchFilterSelector } from 'app/search/items/item-search-filter';
 import { setSettingAction } from 'app/settings/actions';
 import { toggleSearchQueryComponent } from 'app/shell/actions';
 import { AppIcon, faCaretDown, faCaretUp, spreadsheetIcon, uploadIcon } from 'app/shell/icons';
@@ -32,28 +35,37 @@ import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { chainComparator, compareBy, reverseComparator } from 'app/utils/comparators';
 import { emptyArray, emptyObject } from 'app/utils/empty';
 import { useSetCSSVarToHeight, useShiftHeld } from 'app/utils/hooks';
+import { LookupTable, StringLookup } from 'app/utils/util-types';
 import { hasWishListSelector, wishListFunctionSelector } from 'app/wishlists/selectors';
 import { DestinyClass } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
 import { ItemCategoryHashes } from 'data/d2/generated-enums';
 import _ from 'lodash';
-import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactDOM from 'react-dom';
+import React, { ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Dropzone, { DropzoneOptions } from 'react-dropzone';
 import { useSelector } from 'react-redux';
-import { getColumns, getColumnSelectionId } from './Columns';
+import { getColumnSelectionId, getColumns } from './Columns';
 import EnabledColumnsSelector from './EnabledColumnsSelector';
+import ItemActions, { TagCommandInfo } from './ItemActions';
 import { itemIncludesCategories } from './filtering-utils';
-import ItemActions from './ItemActions';
+
+import { compareSelectedItems } from 'app/compare/actions';
+
+import { useTableColumnSorts } from 'app/dim-ui/table-columns';
+import { filterMap } from 'app/utils/collections';
+import { errorMessage } from 'app/utils/errors';
+import { createPortal } from 'react-dom';
 // eslint-disable-next-line css-modules/no-unused-class
 import styles from './ItemTable.m.scss';
-import { ItemCategoryTreeNode } from './ItemTypeSelector';
+import { ItemCategoryTreeNode, armorTopLevelCatHashes } from './ItemTypeSelector';
 import { ColumnDefinition, ColumnSort, Row, SortDirection } from './table-types';
 
-const categoryToClass = {
-  23: DestinyClass.Hunter,
-  22: DestinyClass.Titan,
-  21: DestinyClass.Warlock,
+const possibleStyles = styles as unknown as StringLookup<string>;
+
+const categoryToClass: LookupTable<ItemCategoryHashes, DestinyClass> = {
+  [ItemCategoryHashes.Hunter]: DestinyClass.Hunter,
+  [ItemCategoryHashes.Titan]: DestinyClass.Titan,
+  [ItemCategoryHashes.Warlock]: DestinyClass.Warlock,
 };
 
 const downloadButtonSettings = [
@@ -66,10 +78,10 @@ const downloadButtonSettings = [
   { categoryId: ['ghosts'], csvType: 'Ghost' as const, label: tl('Bucket.Ghost') },
 ];
 
-const MemoRow = React.memo(TableRow);
+const MemoRow = memo(TableRow);
 
 export default function ItemTable({ categories }: { categories: ItemCategoryTreeNode[] }) {
-  const [columnSorts, setColumnSorts] = useState<ColumnSort[]>([
+  const [columnSorts, toggleColumnSort] = useTableColumnSorts([
     { columnId: 'name', sort: SortDirection.ASC },
   ]);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
@@ -80,13 +92,17 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
   const allItems = useSelector(allItemsSelector);
   const searchFilter = useSelector(searchFilterSelector);
   const originalItems = useMemo(() => {
-    const terminal = Boolean(_.last(categories)?.terminal);
+    const terminal = Boolean(categories.at(-1)?.terminal);
     if (!terminal) {
       return emptyArray<DimItem>();
     }
-    const categoryHashes = categories.map((s) => s.itemCategoryHash).filter((h) => h !== 0);
+    const categoryHashes = categories.map((s) => s.itemCategoryHash).filter(Boolean);
+    // a top level class-specific category implies armor
+    if (armorTopLevelCatHashes.some((h) => categoryHashes.includes(h))) {
+      categoryHashes.push(ItemCategoryHashes.Armor);
+    }
     const items = allItems.filter(
-      (i) => i.comparable && itemIncludesCategories(i, categoryHashes) && searchFilter(i)
+      (i) => i.comparable && itemIncludesCategories(i, categoryHashes) && searchFilter(i),
     );
     return items;
   }, [allItems, categories, searchFilter]);
@@ -98,19 +114,25 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
   const itemType = isWeapon ? 'weapon' : isArmor ? 'armor' : 'ghost';
 
   const stores = useSelector(storesSelector);
-  const itemInfos = useSelector(itemInfosSelector);
+  const getTag = useSelector(getTagSelector);
+  const getNotes = useSelector(getNotesSelector);
   const wishList = useSelector(wishListFunctionSelector);
   const hasWishList = useSelector(hasWishListSelector);
   const enabledColumns = useSelector(settingSelector(columnSetting(itemType)));
-  const customTotalStatsByClass = useSelector(settingSelector('customTotalStatsByClass'));
+  const itemCreationContext = useSelector(createItemContextSelector);
   const loadoutsByItem = useSelector(loadoutsByItemSelector);
   const newItems = useSelector(newItemsSelector);
   const destinyVersion = useSelector(destinyVersionSelector);
   const dispatch = useThunkDispatch();
 
-  const classCategoryHash =
-    categories.map((n) => n.itemCategoryHash).find((hash) => hash in categoryToClass) ?? 999;
-  const classIfAny: DestinyClass = categoryToClass[classCategoryHash] ?? DestinyClass.Unknown;
+  const { customStats } = itemCreationContext;
+
+  const classCategoryHash = categories
+    .map((n) => n.itemCategoryHash)
+    .find((hash) => hash in categoryToClass);
+  const classIfAny: DestinyClass = classCategoryHash
+    ? categoryToClass[classCategoryHash] ?? DestinyClass.Unknown
+    : DestinyClass.Unknown;
 
   // Calculate the true height of the table header, for sticky-ness
   const tableRef = useRef<HTMLDivElement>(null);
@@ -125,20 +147,22 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
         }
       }
 
-      document.querySelector('html')!.style.setProperty('--table-header-height', height + 1 + 'px');
+      document.querySelector('html')!.style.setProperty('--table-header-height', `${height + 1}px`);
     }
   });
 
   // Are we at a item category that can show items?
-  const terminal = Boolean(_.last(categories)?.terminal);
+  const terminal = Boolean(categories.at(-1)?.terminal);
 
   const defs = useD2Definitions();
   const items = useMemo(
     () =>
       defs
-        ? originalItems.map((item) => applySocketOverrides(defs, item, socketOverrides[item.id]))
+        ? originalItems.map((item) =>
+            applySocketOverrides(itemCreationContext, item, socketOverrides[item.id]),
+          )
         : originalItems,
-    [defs, originalItems, socketOverrides]
+    [itemCreationContext, defs, originalItems, socketOverrides],
   );
 
   // Build a list of all the stats relevant to this set of items
@@ -149,39 +173,37 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
         : emptyObject<{
             [statHash: number]: StatInfo;
           }>(),
-    [terminal, items]
+    [terminal, items],
   );
-
-  const customStatTotal = customTotalStatsByClass[classIfAny] ?? emptyArray();
 
   const columns: ColumnDefinition[] = useMemo(
     () =>
       getColumns(
         itemType,
         statHashes,
-        classIfAny,
-        itemInfos,
+        getTag,
+        getNotes,
         wishList,
         hasWishList,
-        customStatTotal,
+        customStats,
         loadoutsByItem,
         newItems,
         destinyVersion,
-        onPlugClicked
+        onPlugClicked,
       ),
     [
       wishList,
       hasWishList,
       statHashes,
       itemType,
-      itemInfos,
-      customStatTotal,
-      classIfAny,
+      getTag,
+      getNotes,
+      customStats,
       loadoutsByItem,
       newItems,
       destinyVersion,
       onPlugClicked,
-    ]
+    ],
   );
 
   // This needs work for sure
@@ -189,20 +211,24 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
     () =>
       _.compact(
         enabledColumns.flatMap((id) =>
-          columns.filter((column) => id === getColumnSelectionId(column))
-        )
+          columns.filter(
+            (column) =>
+              id === getColumnSelectionId(column) &&
+              (column.limitToClass === undefined || column.limitToClass === classIfAny),
+          ),
+        ),
       ),
-    [columns, enabledColumns]
+    [columns, enabledColumns, classIfAny],
   );
 
   // process items into Rows
   const unsortedRows: Row[] = useMemo(
     () => buildRows(items, filteredColumns),
-    [filteredColumns, items]
+    [filteredColumns, items],
   );
   const rows = useMemo(
     () => sortRows(unsortedRows, columnSorts, filteredColumns),
-    [unsortedRows, filteredColumns, columnSorts]
+    [unsortedRows, filteredColumns, columnSorts],
   );
 
   const shiftHeld = useShiftHeld();
@@ -214,22 +240,20 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
           columnSetting(itemType),
           Array.from(
             new Set(
-              _.compact(
-                columns.map((c) => {
-                  const cId = getColumnSelectionId(c);
-                  if (cId === id) {
-                    return checked ? cId : undefined;
-                  } else {
-                    return enabledColumns.includes(cId) ? cId : undefined;
-                  }
-                })
-              )
-            )
-          )
-        )
+              filterMap(columns, (c) => {
+                const cId = getColumnSelectionId(c);
+                if (cId === id) {
+                  return checked ? cId : undefined;
+                } else {
+                  return enabledColumns.includes(cId) ? cId : undefined;
+                }
+              }),
+            ),
+          ),
+        ),
       );
     },
-    [dispatch, columns, enabledColumns, itemType]
+    [dispatch, columns, enabledColumns, itemType],
   );
 
   const selectedItems = items.filter((i) => selectedItemIds.includes(i.id));
@@ -238,16 +262,8 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
     dispatch(bulkLockItems(selectedItems, lock));
   });
 
-  const onNote = (note?: string) => {
-    if (!note) {
-      note = undefined;
-    }
-    if (selectedItems.length) {
-      for (const item of selectedItems) {
-        dispatch(setNote(item, note));
-      }
-    }
-  };
+  const [bulkNoteDialog, bulkNote] = useBulkNote();
+  const onNote = () => bulkNote(selectedItems);
 
   /**
    * Handles Click Events for Table Rows
@@ -257,7 +273,7 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
   const onRowClick = useCallback(
     (
       row: Row,
-      column: ColumnDefinition
+      column: ColumnDefinition,
     ): React.MouseEventHandler<HTMLTableDataCellElement> | undefined =>
       column.filter
         ? (e) => {
@@ -265,7 +281,7 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
               if ((e.target as Element).hasAttribute('data-perk-name')) {
                 const filter = column.filter!(
                   (e.target as Element).getAttribute('data-perk-name'),
-                  row.item
+                  row.item,
                 );
                 if (filter) {
                   dispatch(toggleSearchQueryComponent(filter));
@@ -282,31 +298,44 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
               setSelectedItemIds(
                 selectedItemIds.findIndex((selectedItemId) => selectedItemId === row.item.id) === -1
                   ? [...selectedItemIds, row.item.id]
-                  : selectedItemIds.filter((id) => id !== row.item.id)
+                  : selectedItemIds.filter((id) => id !== row.item.id),
               );
             }
           }
         : undefined,
-    [dispatch, selectedItemIds]
+    [dispatch, selectedItemIds],
   );
 
-  const onMoveSelectedItems = (store: DimStore) => {
-    if (selectedItems.length) {
-      const loadout = newLoadout(
-        t('Organizer.BulkMoveLoadoutName'),
-        selectedItems.map((i) => convertToLoadoutItem(i, false))
-      );
+  const onMoveSelectedItems = useCallback(
+    (store: DimStore) => {
+      if (selectedItems.length) {
+        const loadout = newLoadout(
+          t('Organizer.BulkMoveLoadoutName'),
+          selectedItems.map((i) => convertToLoadoutItem(i, false)),
+        );
 
-      dispatch(applyLoadout(store, loadout, { allowUndo: true }));
-    }
-  };
+        dispatch(applyLoadout(store, loadout, { allowUndo: true }));
+      }
+    },
+    [dispatch, selectedItems],
+  );
 
-  const onTagSelectedItems = (tagInfo: TagInfo) => {
-    if (tagInfo.type && selectedItemIds.length) {
+  const onTagSelectedItems = useCallback(
+    (tagInfo: TagCommandInfo) => {
+      if (tagInfo.type && selectedItemIds.length) {
+        const selectedItems = items.filter((i) => selectedItemIds.includes(i.id));
+        dispatch(bulkTagItems(selectedItems, tagInfo.type, true));
+      }
+    },
+    [dispatch, items, selectedItemIds],
+  );
+
+  const onCompareSelectedItems = useCallback(() => {
+    if (selectedItemIds.length) {
       const selectedItems = items.filter((i) => selectedItemIds.includes(i.id));
-      dispatch(bulkTagItems(selectedItems, tagInfo.type, false));
+      dispatch(compareSelectedItems(selectedItems));
     }
-  };
+  }, [dispatch, items, selectedItemIds]);
 
   const gridSpec = `min-content ${filteredColumns
     .map((c) => c.gridWidth ?? 'min-content')
@@ -319,40 +348,9 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
       (_v, n) =>
         `[role="cell"]:nth-of-type(${numColumns * 2}n+${
           n + 2
-        }){background-color:#1d1c2b !important;}`
+        }){background-color:var(--theme-organizer-row-even-bg) !important;}`,
     )
     .join('\n');
-
-  /**
-   * Toggle sorting of columns. If shift is held, adds this column to the sort.
-   */
-  const toggleColumnSort = (column: ColumnDefinition) => () => {
-    setColumnSorts((sorts) => {
-      const newColumnSorts = shiftHeld
-        ? Array.from(sorts)
-        : sorts.filter((s) => s.columnId === column.id);
-      let found = false;
-      let index = 0;
-      for (const columnSort of newColumnSorts) {
-        if (columnSort.columnId === column.id) {
-          newColumnSorts[index] = {
-            ...columnSort,
-            sort: columnSort.sort === SortDirection.ASC ? SortDirection.DESC : SortDirection.ASC,
-          };
-          found = true;
-          break;
-        }
-        index++;
-      }
-      if (!found) {
-        newColumnSorts.push({
-          columnId: column.id,
-          sort: column.defaultSort || SortDirection.ASC,
-        });
-      }
-      return newColumnSorts;
-    });
-  };
 
   /**
    * Select all items, or if any are selected, clear the selection.
@@ -394,7 +392,7 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
   // TODO: drive the CSV export off the same column definitions as this table!
   let downloadAction: ReactNode | null = null;
   const downloadButtonSetting = downloadButtonSettings.find((setting) =>
-    setting.categoryId.includes(categories[1]?.id)
+    setting.categoryId.includes(categories[1]?.id),
   );
   if (downloadButtonSetting) {
     const downloadHandler = (e: React.MouseEvent) => {
@@ -414,20 +412,21 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
     );
   }
 
+  const [confirmDialog, confirm] = useConfirm();
   const importCsv: DropzoneOptions['onDrop'] = async (acceptedFiles) => {
     if (acceptedFiles.length < 1) {
-      alert(t('Csv.ImportWrongFileType'));
+      showNotification({ type: 'error', title: t('Csv.ImportWrongFileType') });
       return;
     }
 
-    if (!confirm(t('Csv.ImportConfirm'))) {
+    if (!(await confirm(t('Csv.ImportConfirm')))) {
       return;
     }
     try {
       const result = await dispatch(importTagsNotesFromCsv(acceptedFiles));
-      alert(t('Csv.ImportSuccess', { count: result }));
+      showNotification({ type: 'success', title: t('Csv.ImportSuccess', { count: result }) });
     } catch (e) {
-      alert(t('Csv.ImportFailed', { error: e.message }));
+      showNotification({ type: 'error', title: t('Csv.ImportFailed', { error: errorMessage(e) }) });
     }
   };
 
@@ -441,6 +440,8 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
       role="table"
       ref={tableRef}
     >
+      {confirmDialog}
+      {bulkNoteDialog}
       <div className={styles.toolbar} ref={toolbarRef}>
         <div>
           <ItemActions
@@ -450,6 +451,7 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
             stores={stores}
             onTagSelectedItems={onTagSelectedItems}
             onMoveSelectedItems={onMoveSelectedItems}
+            onCompareSelectedItems={onCompareSelectedItems}
           />
           <UserGuideLink topic="Organizer" />
           <Dropzone onDrop={importCsv} accept={{ 'text/csv': ['.csv'] }} useFsAccessApi={false}>
@@ -470,7 +472,7 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
             forClass={classIfAny}
           />
         </div>
-        {ReactDOM.createPortal(<style>{rowStyle}</style>, document.head)}
+        {createPortal(<style>{rowStyle}</style>, document.head)}
       </div>
       <div className={clsx(styles.selection, styles.header)} role="columnheader" aria-sort="none">
         <div>
@@ -487,30 +489,44 @@ export default function ItemTable({ categories }: { categories: ItemCategoryTree
           />
         </div>
       </div>
-      {filteredColumns.map((column: ColumnDefinition) => (
-        <div
-          key={column.id}
-          className={clsx(styles[column.id], styles.header, {
-            [styles.stats]: ['stats', 'baseStats'].includes(column.columnGroup?.id ?? ''),
-          })}
-          role="columnheader"
-          aria-sort="none"
-        >
-          <div onClick={column.noSort ? undefined : toggleColumnSort(column)}>
-            {column.header}
-            {!column.noSort && columnSorts.some((c) => c.columnId === column.id) && (
-              <AppIcon
-                className={styles.sorter}
-                icon={
-                  columnSorts.find((c) => c.columnId === column.id)!.sort === SortDirection.DESC
-                    ? faCaretUp
-                    : faCaretDown
-                }
-              />
+      {filteredColumns.map((column: ColumnDefinition) => {
+        const isStatsColumn = ['stats', 'baseStats'].includes(column.columnGroup?.id ?? '');
+        return (
+          <div
+            key={column.id}
+            className={clsx(
+              possibleStyles[column.id],
+              column.id.startsWith('customstat_') && styles.customstat,
+              styles.header,
+              {
+                [styles.stats]: isStatsColumn,
+              },
             )}
+            role="columnheader"
+            aria-sort="none"
+          >
+            <div
+              onClick={
+                column.noSort
+                  ? undefined
+                  : toggleColumnSort(column.id, shiftHeld, column.defaultSort)
+              }
+            >
+              {column.header}
+              {!column.noSort && columnSorts.some((c) => c.columnId === column.id) && (
+                <AppIcon
+                  className={styles.sorter}
+                  icon={
+                    columnSorts.find((c) => c.columnId === column.id)!.sort === SortDirection.DESC
+                      ? faCaretDown
+                      : faCaretUp
+                  }
+                />
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
       {rows.length === 0 && <div className={styles.noItems}>{t('Organizer.NoItems')}</div>}
       {rows.map((row) => (
         <React.Fragment key={row.item.id}>
@@ -549,7 +565,7 @@ function buildRows(items: DimItem[], filteredColumns: ColumnDefinition[]) {
 function sortRows(
   unsortedRows: Row[],
   columnSorts: ColumnSort[],
-  filteredColumns: ColumnDefinition[]
+  filteredColumns: ColumnDefinition[],
 ) {
   const comparator = chainComparator<Row>(
     ...columnSorts.map((sorter) => {
@@ -558,10 +574,14 @@ function sortRows(
         const compare = column.sort
           ? (row1: Row, row2: Row) => column.sort!(row1.values[column.id], row2.values[column.id])
           : compareBy((row: Row) => row.values[column.id] ?? 0);
-        return sorter.sort === SortDirection.ASC ? compare : reverseComparator(compare);
+        // Always sort undefined values to the end
+        return chainComparator(
+          compareBy((row: Row) => row.values[column.id] === undefined),
+          sorter.sort === SortDirection.ASC ? compare : reverseComparator(compare),
+        );
       }
       return compareBy(() => 0);
-    })
+    }),
   );
 
   return Array.from(unsortedRows).sort(comparator);
@@ -612,10 +632,10 @@ function TableRow({
 }: {
   row: Row;
   filteredColumns: ColumnDefinition[];
-  onRowClick(
+  onRowClick: (
     row: Row,
-    column: ColumnDefinition
-  ): ((event: React.MouseEvent<HTMLTableCellElement>) => void) | undefined;
+    column: ColumnDefinition,
+  ) => ((event: React.MouseEvent<HTMLTableCellElement>) => void) | undefined;
 }) {
   return (
     <>
@@ -624,8 +644,9 @@ function TableRow({
         <div
           key={column.id}
           onClick={onRowClick(row, column)}
-          className={clsx(styles[column.id], {
-            [styles.hasFilter]: column.filter,
+          className={clsx(possibleStyles[column.id], {
+            [styles.hasFilter]: column.filter !== undefined,
+            [styles.customstat]: column.id.startsWith('customstat_'),
           })}
           role="cell"
         >

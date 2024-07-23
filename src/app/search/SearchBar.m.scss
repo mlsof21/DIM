@@ -2,45 +2,61 @@
 
 .searchBar {
   position: relative;
+  font-size: 13px;
 }
 
 .open {
   border-bottom-left-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
+  box-shadow: 0 1px 0 1px var(--theme-search-dropdown-border);
 }
 
 .menu {
-  color: white;
-  overflow: hidden;
+  color: var(--theme-text);
   margin: 0;
   border-top: 0;
-  background: #161616;
+  background: var(--theme-search-dropdown-bg);
   position: absolute;
-  z-index: 50;
+  z-index: 1;
   list-style: none;
   padding: 0;
   left: 0;
   right: 0;
-  top: 32px;
-  border-bottom-left-radius: 4px;
-  border-bottom-right-radius: 4px;
+  // Add a top offset for the 1px inset box-shadow/border
+  // This avoids an unwanted dividing line between the search box + dropdown when open
+  top: calc($search-bar-height - 1px);
+  border-bottom-left-radius: $theme-corner-radius-search;
+  border-bottom-right-radius: $theme-corner-radius-search;
+  box-shadow: inset 0 0 0 1px var(--theme-search-dropdown-border);
+  overflow: hidden;
+  overscroll-behavior: none;
+
+  &:empty {
+    display: none !important;
+  }
 
   @include phone-portrait {
-    top: calc(100% + 1px);
-    overflow-y: auto;
-    overscroll-behavior: none;
-    max-height: calc(var(--viewport-height) - var(--header-height));
+    top: 100%;
+    // Fallback to allow either fully or semi-transparent search box borders
+    // Add a margin and change to outset shadows for clearer outlining on mobile
+    // Fill the 1px margin with re-stacked fills/borders to accurately colour-match
+    margin: 0 1px;
+    box-shadow:
+      0 0 0 1px var(--theme-search-dropdown-border),
+      0 0 0 1px var(--theme-sheet-search-bg),
+      0 0 0 1px var(--theme-mobile-background),
+      0 1px 4px 1px rgba(0, 0, 0, 0.5);
+    max-height: calc(var(--viewport-height) - var(--header-height)) !important;
   }
 }
 
 .invalid {
-  color: #aaa !important;
+  color: var(--theme-text-secondary) !important;
 }
 
 .openButton {
   composes: resetButton from '../dim-ui/common.m.scss';
   display: inline-block;
-  margin-left: 5px;
   color: #999;
   font-size: 12px !important;
 }
@@ -49,18 +65,35 @@
   composes: flexRow from '../dim-ui/common.m.scss';
   align-items: flex-start;
   padding: 6px 9px 6px 9px;
+  gap: 6px;
+
+  &:hover {
+    cursor: pointer;
+  }
 
   @include phone-portrait {
-    align-items: center;
-    padding: 14px 14px 14px 9px;
+    padding: 10px 10px 10px 9px;
   }
 }
 
 .menuItemIcon {
   font-size: 12px !important;
+  margin-top: 4px;
+  color: #999;
+}
+
+.armoryItemIcon {
   margin-right: 6px;
   margin-top: 5px;
-  color: #999;
+  width: 24px;
+  height: 24px;
+}
+
+.openInArmoryLabel {
+  font-style: italic;
+  color: grey;
+  margin-left: 2px;
+  margin-right: 4px;
 }
 
 .deleteIcon {
@@ -70,6 +103,7 @@
   color: #999;
   padding: 0 2px;
   visibility: hidden;
+
   @media (hover: none) {
     visibility: visible;
   }
@@ -83,10 +117,10 @@
 }
 
 .highlightedItem {
-  background-color: $orange;
-  color: black !important;
+  background-color: var(--theme-accent-primary);
+  color: var(--theme-text-invert) !important;
   .menuItemIcon {
-    color: black;
+    color: var(--theme-text-invert);
   }
   .deleteIcon {
     color: #333;
@@ -99,7 +133,7 @@
 
 .menuItemQuery {
   white-space: normal;
-  margin: 0;
+  margin: 0 auto 0 0;
   padding: 1px 0;
   overflow: hidden;
   max-height: 4em;
@@ -107,21 +141,6 @@
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-}
-
-.menuItemHelp {
-  flex: 1;
-  color: #999;
-  span {
-    margin: 0 8px 0 24px;
-    @include phone-portrait {
-      // TODO: I don't have a good way to show these on mobile yet
-      display: none;
-    }
-  }
-  .highlightedItem & {
-    color: #222;
-  }
 }
 
 /* Highlighted spans of text in the autocompleter */
@@ -138,15 +157,61 @@
 .keyHelp {
   margin-top: 2px;
   .highlightedItem & {
-    color: #222;
-    border-color: #222;
-  }
-
-  .menuItem:hover & {
-    display: none;
+    color: var(--theme-text-invert);
+    border-color: var(--theme-text-invert);
   }
 }
 
 .saveSearchButton > :global(.app-icon) {
-  color: $orange !important;
+  color: var(--theme-accent-primary) !important;
+}
+
+.filterHelp {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.filterBarButton {
+  margin: 0 6px;
+  padding: 0;
+  appearance: none;
+  display: inline-block;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 1px solid var(--theme-accent-primary);
+  }
+
+  > :global(.app-icon),
+  > button > :global(.app-icon) {
+    font-size: 14px !important;
+    color: #999;
+    // Increase touch target size
+    padding: 4px;
+    margin: -4px;
+    margin-left: 4px;
+    &:first-child {
+      margin-left: -4px;
+    }
+    :global(.mobile-search-link) & {
+      font-size: 18px !important;
+    }
+  }
+
+  > span,
+  > a {
+    margin: 0 !important;
+  }
+
+  @media (hover: hover) {
+    &:hover {
+      > span,
+      > :global(.app-icon),
+      button > :global(.app-icon) {
+        color: var(--theme-accent-primary);
+      }
+    }
+  }
 }

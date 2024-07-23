@@ -12,16 +12,18 @@ import { getCurrentStore, getStore } from 'app/inventory/stores-helpers';
 import { destiny2CoreSettingsSelector, useD2Definitions } from 'app/manifest/selectors';
 import { RAID_NODE } from 'app/search/d2-known-values';
 import { querySelector, useIsPhonePortrait } from 'app/shell/selectors';
-import { motion, PanInfo } from 'framer-motion';
+import { usePageTitle } from 'app/utils/hooks';
+import { PanInfo, motion } from 'framer-motion';
+import _ from 'lodash';
 import { useState } from 'react';
 import { useSelector } from 'react-redux';
 import { DestinyAccount } from '../accounts/destiny-account';
 import CollapsibleTitle from '../dim-ui/CollapsibleTitle';
 import ErrorBoundary from '../dim-ui/ErrorBoundary';
-import '../records/PresentationNode.scss';
 import { Event } from './Event';
 import Milestones from './Milestones';
-import './progress.scss';
+import Pathfinder from './Pathfinder';
+import styles from './Progress.m.scss';
 import Pursuits from './Pursuits';
 import Raids from './Raids';
 import Ranks from './Ranks';
@@ -36,12 +38,13 @@ export default function Progress({ account }: { account: DestinyAccount }) {
   const profileInfo = useSelector(profileResponseSelector);
   const searchQuery = useSelector(querySelector);
   const coreSettings = useSelector(destiny2CoreSettingsSelector);
+  usePageTitle(t('Progress.Progress'));
 
   const [selectedStoreId, setSelectedStoreId] = useState<string | undefined>(undefined);
 
-  useLoadStores(account);
+  const storesLoaded = useLoadStores(account);
 
-  if (!defs || !profileInfo || !stores.length) {
+  if (!defs || !profileInfo || !storesLoaded) {
     return <ShowPageLoading message={t('Loading.Profile')} />;
   }
 
@@ -82,34 +85,38 @@ export default function Progress({ account }: { account: DestinyAccount }) {
   const raidTitle = raidNode?.displayProperties.name;
 
   const eventCardHash = profileInfo.profile.data?.activeEventCardHash;
-  const eventCard = eventCardHash && defs.EventCard.get(eventCardHash);
+  const eventCard = eventCardHash !== undefined && defs.EventCard.get(eventCardHash);
 
   const seasonalChallengesPresentationNode =
-    coreSettings?.seasonalChallengesPresentationNodeHash &&
+    coreSettings?.seasonalChallengesPresentationNodeHash !== undefined &&
     defs.PresentationNode.get(coreSettings.seasonalChallengesPresentationNodeHash);
 
-  const menuItems = [
+  const paleHeartPathfinderNode = defs.PresentationNode.get(1062988660);
+  const ritualsPathfinderNode = defs.PresentationNode.get(622609416);
+
+  const menuItems = _.compact([
     { id: 'ranks', title: t('Progress.CrucibleRank') },
     { id: 'trackedTriumphs', title: t('Progress.TrackedTriumphs') },
-    ...(eventCard ? [{ id: 'event', title: eventCard.displayProperties.name }] : []),
+    eventCard && { id: 'event', title: eventCard.displayProperties.name },
     { id: 'milestones', title: t('Progress.Milestones') },
-    ...(seasonalChallengesPresentationNode
-      ? [
-          {
-            id: 'seasonal-challenges',
-            title: seasonalChallengesPresentationNode.displayProperties.name,
-          },
-        ]
-      : []),
+    paleHeartPathfinderNode && {
+      id: 'paleHeartPathfinder',
+      title: t('Progress.PaleHeartPathfinder'),
+    },
+    ritualsPathfinderNode && { id: 'ritualPathfinder', title: t('Progress.RitualPathfinder') },
+    seasonalChallengesPresentationNode && {
+      id: 'seasonal-challenges',
+      title: seasonalChallengesPresentationNode.displayProperties.name,
+    },
     { id: 'Bounties', title: t('Progress.Bounties') },
     { id: 'Quests', title: t('Progress.Quests') },
     { id: 'Items', title: t('Progress.Items') },
-    ...(raidNode ? [{ id: 'raids', title: raidTitle }] : []),
-  ];
+    raidNode && { id: 'raids', title: raidTitle },
+  ]);
 
   return (
     <ErrorBoundary name="Progress">
-      <PageWithMenu className="progress-page">
+      <PageWithMenu>
         <PageWithMenu.Menu>
           {selectedStore && (
             <CharacterSelect
@@ -119,7 +126,7 @@ export default function Progress({ account }: { account: DestinyAccount }) {
             />
           )}
           {!isPhonePortrait && (
-            <div className="progress-menu">
+            <div className={styles.menuLinks}>
               {menuItems.map((menuItem) => (
                 <PageWithMenu.MenuButton key={menuItem.id} anchor={menuItem.id}>
                   <span>{menuItem.title}</span>
@@ -129,7 +136,7 @@ export default function Progress({ account }: { account: DestinyAccount }) {
           )}
         </PageWithMenu.Menu>
 
-        <PageWithMenu.Contents className="progress-panel">
+        <PageWithMenu.Contents className={styles.progress}>
           <motion.div className="horizontal-swipable" onPanEnd={handleSwipe}>
             <section id="ranks">
               <CollapsibleTitle title={t('Progress.CrucibleRank')} sectionId="profile-ranks">
@@ -173,13 +180,33 @@ export default function Progress({ account }: { account: DestinyAccount }) {
               </CollapsibleTitle>
             </section>
 
+            {paleHeartPathfinderNode && (
+              <ErrorBoundary name={t('Progress.PaleHeartPathfinder')}>
+                <Pathfinder
+                  id="paleHeartPathfinder"
+                  name={t('Progress.PaleHeartPathfinder')}
+                  presentationNode={paleHeartPathfinderNode}
+                  store={selectedStore}
+                />
+              </ErrorBoundary>
+            )}
+
+            {ritualsPathfinderNode && (
+              <ErrorBoundary name={t('Progress.RitualPathfinder')}>
+                <Pathfinder
+                  id="ritualPathfinder"
+                  name={t('Progress.RitualPathfinder')}
+                  presentationNode={ritualsPathfinderNode}
+                  store={selectedStore}
+                />
+              </ErrorBoundary>
+            )}
+
             {seasonalChallengesPresentationNode && (
               <ErrorBoundary name="SeasonalChallenges">
                 <SeasonalChallenges
                   seasonalChallengesPresentationNode={seasonalChallengesPresentationNode}
                   store={selectedStore}
-                  buckets={buckets}
-                  profileResponse={profileInfo}
                 />
               </ErrorBoundary>
             )}

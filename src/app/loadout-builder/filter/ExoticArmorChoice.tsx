@@ -1,21 +1,14 @@
+import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
 import ClosableContainer from 'app/dim-ui/ClosableContainer';
 import { t } from 'app/i18next-t';
 import { DefItemIcon } from 'app/inventory/ItemIcon';
 import { useD2Definitions } from 'app/manifest/selectors';
 import anyExoticIcon from 'images/anyExotic.svg';
 import noExoticIcon from 'images/noExotic.svg';
-import React from 'react';
 import { LOCKED_EXOTIC_ANY_EXOTIC, LOCKED_EXOTIC_NO_EXOTIC } from '../types';
 import styles from './ExoticArmorChoice.m.scss';
 
-export default function ExoticArmorChoice({
-  lockedExoticHash,
-  onClose,
-}: {
-  lockedExoticHash: number;
-  onClose?(): void;
-}) {
-  const defs = useD2Definitions()!;
+export function getLockedExotic(defs: D2ManifestDefinitions, lockedExoticHash: number) {
   const exoticArmor =
     lockedExoticHash !== undefined && lockedExoticHash > 0
       ? defs.InventoryItem.get(lockedExoticHash)
@@ -25,10 +18,23 @@ export default function ExoticArmorChoice({
     lockedExoticHash === LOCKED_EXOTIC_NO_EXOTIC
       ? t('LoadoutBuilder.NoExotic')
       : lockedExoticHash === LOCKED_EXOTIC_ANY_EXOTIC
-      ? t('LoadoutBuilder.AnyExotic')
-      : exoticArmor
-      ? exoticArmor.displayProperties.name
-      : null;
+        ? t('LoadoutBuilder.AnyExotic')
+        : exoticArmor
+          ? exoticArmor.displayProperties.name
+          : null;
+
+  return [exoticArmor, name] as const;
+}
+
+export default function ExoticArmorChoice({
+  lockedExoticHash,
+  onClose,
+}: {
+  lockedExoticHash: number;
+  onClose?: () => void;
+}) {
+  const defs = useD2Definitions()!;
+  const [exoticArmor, name] = getLockedExotic(defs, lockedExoticHash);
 
   const icon =
     lockedExoticHash === LOCKED_EXOTIC_NO_EXOTIC ? (

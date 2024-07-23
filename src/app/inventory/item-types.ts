@@ -4,27 +4,22 @@ import {
   DestinyAmmunitionType,
   DestinyBreakerTypeDefinition,
   DestinyClass,
-  DestinyCollectibleState,
   DestinyDamageTypeDefinition,
   DestinyDisplayPropertiesDefinition,
-  DestinyEnergyTypeDefinition,
   DestinyInventoryItemDefinition,
   DestinyItemInstanceEnergy,
   DestinyItemPerkEntryDefinition,
   DestinyItemPlugBase,
-  DestinyItemQualityBlockDefinition,
   DestinyItemQuantity,
   DestinyItemSocketEntryDefinition,
   DestinyItemTooltipNotification,
   DestinyObjectiveProgress,
   DestinyPlugItemCraftingRequirements,
   DestinyRecordComponent,
-  DestinySandboxPerkDefinition,
   DestinySocketCategoryDefinition,
   DestinyStat,
-  DestinyStatDefinition,
 } from 'bungie-api-ts/destiny2';
-import { InventoryBucket } from './inventory-buckets';
+import { DimBucketType, InventoryBucket } from './inventory-buckets';
 
 /**
  * A generic DIM item, representing almost anything. This completely represents any D2 item, and most D1 items,
@@ -51,7 +46,7 @@ export interface DimItem {
   /** The version of Destiny this comes from. */
   destinyVersion: DestinyVersion;
   /** This is the type of the item (see InventoryBuckets) regardless of location. This string is a DIM concept with no direct correlation to the API types. It should generally be avoided in favor of using bucket hash. */
-  type: NonNullable<InventoryBucket['type']>;
+  type: DimBucketType;
   /** Localized name of this item's type. */
   typeName: string;
   /** The bucket the item normally resides in (even though it may currently be elsewhere, such as in the postmaster). */
@@ -63,7 +58,7 @@ export interface DimItem {
   /** Is this an Exotic item? */
   isExotic: boolean;
   /** If this came from a vendor (instead of character inventory), this houses enough information to re-identify the item. */
-  vendor?: { vendorHash: number; saleIndex: number; characterId: string };
+  vendor?: { vendorHash: number; vendorItemIndex: number; characterId: string };
   /** Localized name of the item. */
   name: string;
   /** Localized description of the item. */
@@ -100,9 +95,9 @@ export interface DimItem {
   uniqueStack: boolean;
   /**
    * The class this item is restricted to. DestinyClass.Unknown means it can be used by any class.
-   * -1 is for classified armor, which, until proven otherwise, can't be equipped by any class.
+   * DestinyClass.Classified is for classified armor, which, until proven otherwise, can't be equipped by any class.
    * */
-  classType: DestinyClass | -1;
+  classType: DestinyClass;
   /** The localized name of the class this item is restricted to. */
   classTypeNameLocalized: string;
   /** Whether this item can be locked. */
@@ -132,28 +127,30 @@ export interface DimItem {
   loreHash?: number;
   /** Metrics that can be used with this item. */
   availableMetricCategoryNodeHashes?: number[];
-  /** If this exists, it's the limit of an item's PL. If NOT, display no information. Maybe it's unlimited PL. Maybe it's a weird item. */
-  powerCap: number | null;
-  /** Information about how this item works with infusion. */
-  infusionQuality: DestinyItemQualityBlockDefinition | null;
+  /** If any two items share at least one number on this list, they can be infused into each other. */
+  infusionCategoryHashes: number[] | null;
   /** The DestinyVendorDefinition hash of the vendor that can preview the contents of this item, if there is one. */
   previewVendor?: number;
   /** Localized string for where this item comes from... or other stuff like it not being recoverable from collections */
   displaySource?: string;
   collectibleHash?: number;
+  // TODO: pull search-only fields out
   /** The DestinyCollectibleDefinition sourceHash for a specific item (D2). Derived entirely from collectibleHash */
   source?: number;
   /** Information about this item as a plug. Mostly useful for mod collectibles. */
   plug?: {
     energyCost: number;
-    costElementIcon?: string;
   };
   /** Extra pursuit info, if this item is a quest or bounty. */
   pursuit: DimPursuit | null;
 
   // "Mutable" data - this may be changed by moving the item around, lock/unlock, etc. Any place DIM updates its view of the world without a profile refresh. This info is always reset to server truth on a refresh.
 
-  /** The ID of the store that currently contains this item. */
+  /**
+   * The ID of the store that currently contains this item.
+   *
+   * This will be a Bungie character ID (long string of numbers) or the string 'vault'.
+   */
   owner: string;
   /** Is this item currently equipped? */
   equipped: boolean;
@@ -166,8 +163,8 @@ export interface DimItem {
 
   // Dynamic data - this may change between profile updates
 
-  /** The damage type this weapon deals, or energy type of armor, or damage type corresponding to the item's elemental resistance. */
-  element: DestinyDamageTypeDefinition | DestinyEnergyTypeDefinition | null;
+  /** The damage type this weapon deals, or damage type corresponding to the item's elemental resistance. */
+  element: DestinyDamageTypeDefinition | null;
   /** Whether this item CANNOT be transferred. */
   notransfer: boolean;
   /** Is this item complete (leveled, unlocked, objectives complete)? */
@@ -177,18 +174,17 @@ export interface DimItem {
   /**
    * The primary stat (Attack, Defense, Speed) of the item. Useful for display and for some weirder stat types. Prefer using "power" if what you want is power.
    */
-  primaryStat:
-    | (DestinyStat & {
-        // TODO: get rid of this
-        stat: DestinyStatDefinition;
-      })
-    | null;
+  primaryStat: DestinyStat | null;
+  /**
+   * Display info for the primary stat (Attack, Defense, Speed, etc).
+   */
+  primaryStatDisplayProperties?: DestinyDisplayPropertiesDefinition;
   /** The power level of the item. This is a synonym for (primaryStat?.value ?? 0) for items with power, and 0 otherwise. */
   power: number;
   /** Is this a masterwork? (D2 only) */
   masterwork: boolean;
-  /** Is this crafted? (D2 only) */
-  crafted: boolean;
+  /** If truthy, Bungie indicated this item is crafted. This could just mean the item has a level and a crafting date, like enhanced weapons, even partially-enhanced ones. */
+  crafted: 'crafted' | 'enhanced' | false;
   /** Does this have a highlighted (crafting) objective? (D2 Only) */
   highlightedObjective: boolean;
   /** What percent complete is this item (considers XP and objectives). */
@@ -196,11 +192,11 @@ export interface DimItem {
   /** D2 items use sockets and plugs to represent everything from perks to mods to ornaments and shaders. */
   sockets: DimSockets | null;
   /** Sometimes the API doesn't return socket info. This tells whether the item *should* have socket info but doesn't. */
-  missingSockets: boolean;
+  missingSockets: false | 'missing' | 'not-loaded';
   /** Detailed stats for the item. */
   stats: DimStat[] | null;
   /** Any objectives associated with the item. */
-  objectives: DestinyObjectiveProgress[] | null;
+  objectives?: DestinyObjectiveProgress[];
   /** Stat Tracker */
   metricHash?: number;
   /** Stat Tracker Progress */
@@ -217,16 +213,15 @@ export interface DimItem {
    * Optional in case we ever fail to match items to their record.
    */
   patternUnlockRecord?: DestinyRecordComponent;
-  /** If this item has Deepsight Resonance, this includes info about its Deepsight properties. */
-  deepsightInfo?: DimDeepsight;
+  /** If this item has Deepsight Resonance (a pattern can be extracted). */
+  deepsightInfo?: boolean;
   /** If this item has a catalyst, this includes info about its catalyst properties. */
   catalystInfo?: DimCatalyst;
   /** an item's current breaker type, if it has one */
   breakerType: DestinyBreakerTypeDefinition | null;
   /** The foundry this item was made by */
-  foundry: string | null;
-  /** The state of this item in the user's D2 Collection */
-  collectibleState?: DestinyCollectibleState;
+  // TODO: only used by search/spreadsheet
+  foundry?: string;
   /** Extra tooltips to show in the item popup */
   tooltipNotifications?: DestinyItemTooltipNotification[];
 }
@@ -255,26 +250,23 @@ export interface DimMasterwork {
   tier?: number;
   /** The stats that are enhanced by this masterwork. */
   stats?: {
-    hash?: number;
+    hash: number;
     /** The name of the stat enhanced by this masterwork. */
-    name?: string;
+    name: string;
     /** How much the stat is enhanced by this masterwork. */
-    value?: number;
+    value: number;
+    /** Is this a primary stat effect or secondary? Adept/crafted weapons can get a small +X to all stats; these are secondary */
+    isPrimary: boolean;
   }[];
 }
 
 export interface DimCrafted {
   /** The level of this crafted weapon */
-  level?: number;
+  level: number;
   /** 0-1 progress to the next level */
-  progress?: number;
-  /** when this weapon was crafted, UTC epoch milliseconds timestamp */
-  dateCrafted?: number;
-}
-
-export interface DimDeepsight {
-  /** Progress of attuning the item - when complete, a resonant material can be extracted */
-  attunementObjective: DestinyObjectiveProgress;
+  progress: number;
+  /** when this weapon was crafted, UTC epoch seconds timestamp */
+  craftedDate: number;
 }
 
 export interface DimCatalyst {
@@ -282,9 +274,8 @@ export interface DimCatalyst {
   complete: boolean;
   /** Whether the player has unlocked/discovered the catalyst */
   unlocked: boolean;
-
-  // TODO: on item popup, remove catalyst socket if item.catalystInfo is undefined
-  // TODO: on item popup, show catalyst progress somewhere? maybe like deepsight?
+  /** Progress the player has made on unlocking the catalyst  */
+  objectives?: DestinyObjectiveProgress[];
 }
 
 export interface DimStat {
@@ -314,10 +305,6 @@ export interface DimStat {
    * This is true of armor stats.
    */
   additive: boolean;
-  /**
-   * Whether the stat is always active or certain conditions need to be met before it is.
-   */
-  isConditionallyActive: boolean;
 }
 
 export interface D1Stat extends DimStat {
@@ -398,8 +385,6 @@ export interface PluggableInventoryItemDefinition extends DestinyInventoryItemDe
 export interface DimPlug {
   /** The InventoryItem definition associated with this plug. */
   readonly plugDef: PluggableInventoryItemDefinition;
-  /** Perks associated with the use of this plug. TODO: load on demand? */
-  readonly perks: DestinySandboxPerkDefinition[];
   /** Objectives associated with this plug, usually used to unlock it. */
   readonly plugObjectives: DestinyObjectiveProgress[];
   /** Is the plug enabled? For example, some perks only activate on certain planets. */
@@ -412,6 +397,8 @@ export interface DimPlug {
   } | null;
   /** This plug is one of the random roll options but the current version of this item cannot roll this perk. */
   readonly cannotCurrentlyRoll?: boolean;
+  /** This plug is one of the collections perks and may not 100% roll */
+  readonly unreliablePerkOption?: boolean;
 }
 
 export interface DimPlugSet {
@@ -429,6 +416,10 @@ export interface DimPlugSet {
    * want to access DimSocket.emptyPlugItemHash instead!
    */
   readonly precomputedEmptyPlugItemHash?: number;
+
+  /** A precomputed list of plug hashes that can not roll on current versions of the item. */
+  readonly plugHashesThatCannotRoll: number[];
+  readonly plugHashesThatCanRoll: number[];
 }
 
 export interface DimSocket {
@@ -482,8 +473,6 @@ export interface DimSocket {
    */
   craftingData?: { [plugHash: number]: DestinyPlugItemCraftingRequirements | undefined };
 
-  /** Plug hashes in this item visible in the collections roll, if this is a perk */
-  curatedRoll: number[] | null;
   /**
    * The plug item hash used to reset this plug to an empty default plug.
    * This is a heuristic improvement over singleInitialItemHash, but it's
@@ -504,8 +493,14 @@ export interface DimSocket {
    * This might be widely synonymous with isReusable, but seems like it's being used for things other than display style logic.
    */
   isPerk: boolean;
+  /**
+   * Is this socket a mod socket - these are displayed as squares with a border.
+   */
+  isMod: boolean;
   /** Is this socket reusable? This is a notably different behavior and UI in Destiny, displayed in circles rather than squares. */
   isReusable: boolean;
+  /** Is this socket visible in-game? DIM mostly ignores this, but for some known sockets this controls item behavior / filter matching */
+  visibleInGame?: boolean;
   /** Deep information about this socket, including what types of things can be inserted into it. TODO: do we need all of this? */
   socketDefinition: DestinyItemSocketEntryDefinition;
 }
@@ -527,16 +522,32 @@ export interface DimSockets {
   categories: DimSocketCategory[];
 }
 
-export interface DimPursuit {
-  expirationDate?: Date;
-  rewards: DestinyItemQuantity[];
+/**
+ * If a pursuit can expire, this contains the relevant info.
+ */
+export interface DimPursuitExpiration {
+  expirationDate: Date;
   suppressExpirationWhenObjectivesComplete: boolean;
-  expiredInActivityMessage?: string;
+  expiredInActivityMessage: string | undefined;
+}
+
+/**
+ * If a pursuit belongs to a quest line, this tells us
+ * at which point in the quest line this particular pursuit
+ * is located.
+ */
+export interface DimQuestLine {
+  questStepNum: number;
+  questStepsTotal: number;
+  description: string | undefined;
+}
+
+export interface DimPursuit {
+  expiration: DimPursuitExpiration | undefined;
+  rewards: DestinyItemQuantity[];
   /** Modifiers active in this quest */
   modifierHashes: number[];
-  questStepNum?: number;
-  questStepsTotal?: number;
-  questLineDescription?: string;
+  questLine?: DimQuestLine;
   /** If this pursuit is really a Record (e.g. a seasonal challenge) */
   recordHash?: number;
   trackedInGame?: boolean;

@@ -10,12 +10,13 @@ key.pem
 ca.crt
 ca.key
 .brackets.json
-.npmrc
 npm-debug.log
-.nvmrc
 yarn-error.log
 .eslintcache
 manifest-cache
 Heap.*
 eslint_report.json
 webpack-stats.json
+junit.xml
+eslint.results.json
+.pnpm-store

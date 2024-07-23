@@ -1,9 +1,5 @@
 @use '../variables.scss' as *;
 
-.page {
-  margin-top: 10px;
-}
-
 .menu {
   :global(.dim-button),
   select {
@@ -12,8 +8,11 @@
 }
 
 .menuButtons {
+  display: flex;
+  flex-direction: column;
   margin: 8px 0;
-  @include vertical-space-children(8px);
+  gap: 8px;
+
   @include phone-portrait {
     padding-left: 10px;
     padding-right: 10px;
@@ -25,6 +24,20 @@
   text-align: left;
 }
 
-.iconLabel {
-  margin-right: 8px;
+.hashtagTip {
+  display: flex;
+  align-items: center;
+}
+
+.loadoutRow {
+  padding-bottom: 10px;
+}
+
+.seasonHeader {
+  composes: flexRow from '../dim-ui/common.m.scss';
+  align-items: center;
+  gap: 0.25em;
+  margin: 16px 0 0 0;
+  border-bottom: 1px solid var(--theme-text);
+  font-size: 16px;
 }

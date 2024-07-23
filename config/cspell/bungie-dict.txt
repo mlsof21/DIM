@@ -47,3 +47,5 @@ wrathofthemachine
 Xur
 Zavala
 Русский
+Telesto
+Neomuna

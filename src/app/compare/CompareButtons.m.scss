@@ -1,6 +1,9 @@
 .svgIcon {
-  height: 1.3em;
-  margin: 2.5px;
+  filter: drop-shadow(0 0 1px black);
+  img {
+    height: 1.3em;
+    margin: 2.5px;
+  }
 }
 
 .inlineImageIcon {
@@ -8,4 +11,8 @@
   vertical-align: middle;
   height: 1.3em;
   width: 1.3em;
+}
+
+.intrinsicIcon {
+  transform: scale(1.2);
 }

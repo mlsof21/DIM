@@ -1,12 +1,11 @@
-import { t, tl } from 'app/i18next-t';
-import _ from 'lodash';
-import Mousetrap from 'mousetrap';
+import { I18nKey, t, tl } from 'app/i18next-t';
+import { isMac } from 'app/utils/browsers';
+import { compareBy } from 'app/utils/comparators';
+import { StringLookup } from 'app/utils/util-types';
+import { noop } from 'lodash';
 
-// A unique ID generator
-let componentId = 0;
-export const getHotkeyId = () => componentId++;
-
-const map = {
+/** Mapping from key name to fun symbols */
+const map: StringLookup<string> = {
   command: '\u2318', // ⌘
   shift: '\u21E7', // ⇧
   left: '\u2190', // ←
@@ -17,7 +16,8 @@ const map = {
   backspace: '\u232B', // ⌫
 };
 
-const keyi18n = {
+/** We translate the keys that don't have fun symbols. */
+const keyi18n: StringLookup<I18nKey> = {
   tab: tl('Hotkey.Tab'),
   enter: tl('Hotkey.Enter'),
 };
@@ -32,124 +32,221 @@ export function symbolize(combo: string) {
     .map((part) => {
       // try to resolve command / ctrl based on OS:
       if (part === 'mod') {
-        part = window.navigator?.platform.includes('Mac') ? 'command' : 'ctrl';
+        part = isMac() ? 'command' : 'ctrl';
       }
 
-      return keyi18n[part] ? t(keyi18n[part]) : map[part] || part;
+      return keyi18n[part] ? t(keyi18n[part]!) : map[part] || part.toUpperCase();
     })
-    .join(' + ');
-}
-
-function format(hotkey: Hotkey) {
-  // Don't show all the possible key combos, just the first one.  Not sure
-  // of usecase here, so open a ticket if my assumptions are wrong
-  const combo = hotkey.combo;
-
-  const sequence = combo.split(/\s/);
-  for (let i = 0; i < sequence.length; i++) {
-    sequence[i] = symbolize(sequence[i]);
-  }
-  return sequence.join(' ');
+    .join(' ');
 }
 
 export interface Hotkey {
+  /** The actual hotkey combo, like "shift+p" */
   combo: string;
+  /** A description that'll be shown on the hotkey help screen. */
   description: string;
-  action?: 'keypress' | 'keydown' | 'keyup';
-  allowIn?: string[];
-  callback(event: KeyboardEvent): void;
+  /** What to do when the hotkey is triggered. */
+  callback: (event: KeyboardEvent) => void;
 }
 
-class HotkeyRegistry {
-  private hotkeys: { [componentId: number]: Hotkey[] } = {};
+// Each key combo can have many hotkey implementations bound to it, but only the
+// last one in the array gets triggered.
+const keyMap: { [combo: string]: undefined | (Hotkey & { id: string })[] } = {};
 
-  register(componentId: number, hotkeys: Hotkey[]) {
-    if (hotkeys?.length) {
-      hotkeys.forEach(installHotkey);
-      this.hotkeys[componentId] = hotkeys;
-    }
-  }
-
-  unregister(componentId: number) {
-    if (this.hotkeys[componentId]) {
-      for (const hotkey of this.hotkeys[componentId]) {
-        Mousetrap.unbind(hotkey.combo);
-      }
-      delete this.hotkeys[componentId];
-    }
-  }
-
-  getAllHotkeys() {
-    const combos: { [combo: string]: string } = {};
-    _.forIn(this.hotkeys, (hotkeys) => {
-      for (const hotkey of hotkeys) {
-        const combo = format(hotkey);
-        combos[combo] = hotkey.description;
-      }
-    });
-    return combos;
+export function clearAllHotkeysForTest() {
+  for (const key of Object.keys(keyMap)) {
+    delete keyMap[key];
   }
 }
 
-const hotkeys = new HotkeyRegistry();
-export default hotkeys;
-
-function installHotkey(hotkey: Hotkey) {
-  // these elements are prevented by the default Mousetrap.stopCallback():
-  const preventIn = ['INPUT', 'SELECT', 'TEXTAREA'];
-
-  // if callback is defined, then wrap it in a function
-  // that checks if the event originated from a form element.
-  // the function blocks the callback from executing unless the element is specified
-  // in allowIn (emulates Mousetrap.stopCallback() on a per-key level)
-  // save the original callback
-  const _callback = hotkey.callback;
-
-  // remove anything from preventIn that's present in allowIn
-  if (hotkey.allowIn) {
-    let index;
-    for (let i = 0; i < hotkey.allowIn.length; i++) {
-      hotkey.allowIn[i] = hotkey.allowIn[i].toUpperCase();
-      index = preventIn.indexOf(hotkey.allowIn[i]);
-      if (index !== -1) {
-        preventIn.splice(index, 1);
-      }
-    }
+/**
+ * Add a new set of hotkeys. The id parameter allows us to preserve this hotkey
+ * in the stack of bindings for the hotkey even when repeatedly registered - use
+ * the useId hook to generate a stable ID for a component to use for this. Call
+ * removeHotkeysById when a component is unmounted or the hotkey is disabled.
+ */
+export function registerHotkeys(id: string, hotkeys: Hotkey[]) {
+  if (!hotkeys?.length) {
+    return noop;
   }
+  for (const hotkey of hotkeys) {
+    bind(id, hotkey);
+  }
+}
 
-  // create the new wrapper callback
-  const callback = (event: KeyboardEvent) => {
-    let shouldExecute = true;
-
-    // if the callback is executed directly `hotkey.get('w').callback()`
-    // there will be no event, so just execute the callback.
-    if (event) {
-      const target = (event.target || event.srcElement!) as Element | undefined; // srcElement is IE only
-      const nodeName = target?.nodeName.toUpperCase();
-
-      // check if the input has a mousetrap class, and skip checking preventIn if so
-      if (target?.classList.contains('mousetrap')) {
-        shouldExecute = true;
-      } else {
-        // don't execute callback if the event was fired from inside an element listed in preventIn
-        for (const prevent of preventIn) {
-          if (prevent === nodeName) {
-            shouldExecute = false;
-            break;
-          }
-        }
-      }
-    }
-
-    if (shouldExecute) {
-      _callback(event);
-    }
-  };
-
-  if (hotkey.action) {
-    Mousetrap.bind(hotkey.combo, callback, hotkey.action);
+/**
+ * Remove bound hotkeys from the stack by id. This should be the same ID the
+ * hotkey was registered under. Pass combo if you know it to speed up removal.
+ */
+export function removeHotkeysById(id: string, combo?: string) {
+  if (combo) {
+    unbind(id, combo);
   } else {
-    Mousetrap.bind(hotkey.combo, callback);
+    // Look for the ID in every combo
+    for (const combo of Object.keys(keyMap)) {
+      unbind(id, combo);
+    }
   }
-  return hotkey;
 }
+
+export function getAllHotkeys() {
+  const combos: { [combo: string]: string } = {};
+  for (const k in keyMap) {
+    const hotkeyList = keyMap[k]!;
+    const hotkey = hotkeyList.at(-1)!;
+    const combo = symbolize(hotkey.combo);
+    combos[combo] = hotkey.description;
+  }
+  return combos;
+}
+
+const modifiers = ['ctrl', 'alt', 'shift', 'meta'];
+function normalizeCombo(combo: string) {
+  return combo
+    .split('+')
+    .map((c) => (c === 'mod' ? (isMac() ? 'meta' : 'ctrl') : c))
+    .sort(compareBy((c) => modifiers.indexOf(c) + 1 || 999))
+    .join('+');
+}
+
+function bind(id: string, hotkey: Hotkey) {
+  const keys = (keyMap[normalizeCombo(hotkey.combo)] ??= []);
+  // Replace existing hotkeys in the same place in the stack, so re-renders
+  // don't pop the hotkey to the top.
+  const existingIndex = keys.findIndex((h) => h.id === id);
+  if (existingIndex >= 0) {
+    keys[existingIndex] = { ...hotkey, id };
+  } else {
+    keys.push({ ...hotkey, id });
+  }
+}
+
+function unbind(id: string, combo: string) {
+  const normalizedCombo = normalizeCombo(combo);
+  const hotkeysForCombo = keyMap[normalizedCombo];
+  const existingIndex = hotkeysForCombo?.findIndex((h) => h.id === id) ?? -1;
+  if (existingIndex >= 0) {
+    hotkeysForCombo!.splice(existingIndex, 1);
+  }
+  if (!hotkeysForCombo?.length) {
+    delete keyMap[normalizedCombo];
+  }
+}
+
+const _MAP: { [code: number]: string } = {
+  8: 'backspace',
+  9: 'tab',
+  13: 'enter',
+  16: 'shift',
+  17: 'ctrl',
+  18: 'alt',
+  20: 'capslock',
+  27: 'esc',
+  32: 'space',
+  33: 'pageup',
+  34: 'pagedown',
+  35: 'end',
+  36: 'home',
+  37: 'left',
+  38: 'up',
+  39: 'right',
+  40: 'down',
+  45: 'ins',
+  46: 'del',
+  91: 'meta',
+  93: 'meta',
+  224: 'meta',
+  106: '*',
+  107: '+',
+  109: '-',
+  110: '.',
+  111: '/',
+  186: ';',
+  187: '=',
+  188: ',',
+  189: '-',
+  190: '.',
+  191: '/',
+  192: '`',
+  219: '[',
+  220: '\\',
+  221: ']',
+  222: "'",
+};
+
+/**
+ * A list of hotkeys that should not be blocked even when a
+ * form control is focused.
+ */
+const allowedKeysInFormControls = ['Escape'];
+
+// Add in the number keys
+for (let i = 0; i <= 9; ++i) {
+  // This needs to use a string cause otherwise since 0 is falsey
+  // mousetrap will never fire for numpad 0 pressed as part of a keydown
+  // event.
+  //
+  // @see https://github.com/ccampbell/mousetrap/pull/258
+  _MAP[i + 96] = i.toString();
+}
+
+function handleKeyEvent(e: KeyboardEvent) {
+  /**
+   * By default, we block custom hotkeys to prevent overriding built-in input
+   * hotkeys. However, certain custom hotkeys should be allowed even when a
+   * form control is focused. For example, pressing Escape inside of a sheet
+   * should always close the sheet, even if an input in the sheet is focused.
+   */
+  const blockHotKeyInFormControl =
+    e.target instanceof HTMLElement &&
+    (e.target.isContentEditable ||
+      (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) &&
+        (e.target as HTMLInputElement).type !== 'checkbox')) &&
+    !allowedKeysInFormControls.includes(e.key);
+
+  if (e.isComposing || e.repeat || blockHotKeyInFormControl) {
+    return;
+  }
+
+  const combo = new Set<string>();
+  if (e.ctrlKey && e.key !== 'ctrl') {
+    combo.add('ctrl');
+  }
+  if (e.altKey && e.key !== 'alt') {
+    combo.add('alt');
+  }
+  if (e.shiftKey && e.key !== 'shift') {
+    combo.add('shift');
+  }
+  if (e.metaKey && e.key !== 'meta') {
+    combo.add('meta');
+  }
+
+  // This works for stuff like Shift+1
+  const character = _MAP[e.which] ?? String.fromCharCode(e.which).toLowerCase();
+  combo.add(character);
+  const comboStr = [...combo].join('+');
+  if (trigger(comboStr, e)) {
+    return;
+  }
+
+  // Then try the resolved key which works for stuff like ?. We don't need modifiers for that one.
+  combo.delete('shift');
+  combo.delete(character);
+  combo.add(e.key);
+  const comboStr2 = [...combo].join('+');
+  trigger(comboStr2, e);
+}
+
+function trigger(comboStr: string, e: KeyboardEvent) {
+  const callbacks = keyMap[comboStr];
+  if (callbacks) {
+    // Only call the last callback registered for this combo.
+    callbacks.at(-1)?.callback(e);
+    e.preventDefault();
+    return true;
+  }
+  return false;
+}
+
+document.addEventListener('keydown', handleKeyEvent);

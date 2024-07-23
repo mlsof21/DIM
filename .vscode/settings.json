@@ -2,10 +2,11 @@
   "editor.tabSize": 2,
   "editor.trimAutoWhitespace": true,
   "files.trimTrailingWhitespace": true,
-  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.tsdk": "./node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "editor.formatOnSave": true,
-  "jest.autoRun": "off",
-  "eslint.packageManager": "yarn",
+  "jest.runMode": "on-demand",
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
   "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
   "search.exclude": {
     "**/data/d1/manifests": true,
@@ -13,23 +14,30 @@
     "destiny-icons": true,
     "manifest-cache": true
   },
-  "editor.codeActionsOnSave": {
-    "source.fixAll": true
+  "files.readonlyInclude": {
+    "node_modules/**": true,
+    "src/data/**": true,
+    "destiny-icons/**": true,
+    "src/locale/*": true,
+    "**/*.m.scss.d.ts": true
   },
-  "jest.jestCommandLine": "yarn test",
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit"
+  },
+  "jest.jestCommandLine": "pnpm test --",
   "[javascript]": {
     "editor.codeActionsOnSave": {
-      "source.organizeImports": false
+      "source.organizeImports": "never"
     }
   },
   "[typescript]": {
     "editor.codeActionsOnSave": {
-      "source.organizeImports": false
+      "source.organizeImports": "never"
     }
   },
   "[typescriptreact]": {
     "editor.codeActionsOnSave": {
-      "source.organizeImports": false
+      "source.organizeImports": "never"
     }
   },
   "cSpell.enabledLanguageIds": [
@@ -55,6 +63,12 @@
     "*.tsx": "${capture}.ts, ${capture}.test.ts",
     "*.m.scss": "${capture}.m.scss.d.ts",
     "tsconfig.json": "tsconfig.*.json",
-    "package.json": "package-lock.json, yarn.lock"
+    "package.json": "package-lock.json, pnpm-lock.yaml"
+  },
+  "eslint.lintTask.options": "src",
+  "[javascript][typescript][typescriptreact]": {
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "never"
+    }
   }
 }

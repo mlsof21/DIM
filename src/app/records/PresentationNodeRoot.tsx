@@ -1,20 +1,24 @@
+import { createItemContextSelector, currentStoreSelector } from 'app/inventory/selectors';
 import { useD2Definitions } from 'app/manifest/selectors';
 import { ItemFilter } from 'app/search/filter-types';
 import { DestinyProfileResponse } from 'bungie-api-ts/destiny2';
 import { useMemo, useState } from 'react';
-import { InventoryBuckets } from '../inventory/inventory-buckets';
-import PlugSet from './PlugSet';
-import { itemsForProfilePlugSet } from './plugset-helpers';
-import { filterPresentationNodesToSearch, toPresentationNodeTree } from './presentation-nodes';
+import { useSelector } from 'react-redux';
 import PresentationNode from './PresentationNode';
+import styles from './PresentationNodeRoot.m.scss';
 import PresentationNodeSearchResults from './PresentationNodeSearchResults';
+import { makeItemsForCatalystRecords } from './catalysts';
+import {
+  filterPresentationNodesToSearch,
+  hideCompletedRecords,
+  toPresentationNodeTree,
+} from './presentation-nodes';
 
 interface Props {
   presentationNodeHash: number;
   openedPresentationHash?: number;
   ownedItemHashes?: Set<number>;
   profileResponse: DestinyProfileResponse;
-  buckets?: InventoryBuckets;
   searchQuery?: string;
   isTriumphs?: boolean;
   overrideName?: string;
@@ -25,13 +29,19 @@ interface Props {
   searchFilter?: ItemFilter;
 }
 
+const plugSetCollections = [
+  // Emotes
+  { hash: 2860926541, displayItem: 3960522253 },
+  // Projections
+  { hash: 2540258701, displayItem: 2544954628 },
+];
+
 /**
  * The root for an expandable presentation node tree.
  */
 export default function PresentationNodeRoot({
   presentationNodeHash,
   openedPresentationHash,
-  buckets,
   profileResponse,
   ownedItemHashes,
   showPlugSets,
@@ -41,6 +51,7 @@ export default function PresentationNodeRoot({
   overrideName,
   completedRecordsHidden,
 }: Props) {
+  const itemCreationContext = useSelector(createItemContextSelector);
   const defs = useD2Definitions()!;
   const [nodePath, setNodePath] = useState<number[]>([]);
 
@@ -57,24 +68,41 @@ export default function PresentationNodeRoot({
     fullNodePath.unshift(presentationNodeHash);
   }
 
-  const nodeTree = useMemo(
-    () => toPresentationNodeTree(defs, buckets, profileResponse, presentationNodeHash),
-    [defs, buckets, profileResponse, presentationNodeHash]
+  const currentStore = useSelector(currentStoreSelector);
+
+  const unfilteredNodeTree = useMemo(
+    () =>
+      toPresentationNodeTree(
+        itemCreationContext,
+        presentationNodeHash,
+        showPlugSets ? plugSetCollections : [],
+        currentStore?.genderHash,
+      ),
+    [itemCreationContext, presentationNodeHash, showPlugSets, currentStore?.genderHash],
   );
-  // console.log(nodeTree);
+
+  const nodeTree = useMemo(
+    () =>
+      unfilteredNodeTree && completedRecordsHidden
+        ? hideCompletedRecords(unfilteredNodeTree)
+        : unfilteredNodeTree,
+    [completedRecordsHidden, unfilteredNodeTree],
+  );
 
   if (!nodeTree) {
     return null;
   }
 
   if (searchQuery && searchFilter) {
+    const catalystItemsByRecordHash = makeItemsForCatalystRecords(itemCreationContext);
+
     const searchResults = filterPresentationNodesToSearch(
       nodeTree,
       searchQuery.toLowerCase(),
       searchFilter,
-      Boolean(completedRecordsHidden),
       undefined,
-      defs
+      defs,
+      catalystItemsByRecordHash,
     );
 
     return (
@@ -86,15 +114,8 @@ export default function PresentationNodeRoot({
     );
   }
 
-  const plugSetCollections = [
-    // Emotes
-    { hash: 1155321287, displayItem: 3960522253 },
-    // Projections
-    { hash: 499268600, displayItem: 2544954628 },
-  ];
-
   return (
-    <div className="presentation-node-root">
+    <div className={styles.root}>
       <PresentationNode
         node={nodeTree}
         ownedItemHashes={ownedItemHashes}
@@ -105,20 +126,6 @@ export default function PresentationNodeRoot({
         isInTriumphs={isTriumphs}
         overrideName={overrideName}
       />
-
-      {buckets &&
-        showPlugSets &&
-        plugSetCollections.map((plugSetCollection) => (
-          <div key={plugSetCollection.hash} className="presentation-node">
-            <PlugSet
-              buckets={buckets}
-              plugSetCollection={plugSetCollection}
-              items={itemsForProfilePlugSet(profileResponse, Number(plugSetCollection.hash))}
-              path={fullNodePath}
-              onNodePathSelected={setNodePath}
-            />
-          </div>
-        ))}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { addCompareItem } from 'app/compare/actions';
 import { useHotkey } from 'app/hotkeys/useHotkey';
 import { t } from 'app/i18next-t';
+import { showInfuse } from 'app/infuse/infuse';
 import { DimItem } from 'app/inventory/item-types';
 import { moveItemTo } from 'app/inventory/move-item';
 import { sortedStoresSelector } from 'app/inventory/selectors';
@@ -12,12 +13,9 @@ import { useSetting } from 'app/settings/hooks';
 import { AppIcon, maximizeIcon, minimizeIcon } from 'app/shell/icons';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import clsx from 'clsx';
-import React from 'react';
 import { useSelector } from 'react-redux';
 import styles from './DesktopItemActions.m.scss';
 import { ItemActionsModel } from './item-popup-actions';
-
-const sharedButtonProps = { role: 'button', tabIndex: -1 };
 
 export const menuClassName = styles.interaction;
 
@@ -34,17 +32,19 @@ export default function DesktopItemActions({
 
   const toggleSidecar = () => setSidecarCollapsed(!sidecarCollapsed);
 
+  useHotkey('esc', t('Hotkey.ClearDialog'), () => hideItemPopup());
+
   useHotkey('k', t('MovePopup.ToggleSidecar'), toggleSidecar);
   useHotkey('p', t('Hotkey.Pull'), () => {
     // TODO: if movable
     const currentChar = getCurrentStore(stores)!;
-    dispatch(moveItemTo(item, currentChar, false, item.maxStackSize));
+    dispatch(moveItemTo(item, currentChar, false, item.amount));
     hideItemPopup();
   });
   useHotkey('v', t('Hotkey.Vault'), () => {
     // TODO: if vaultable
     const vault = getVault(stores)!;
-    dispatch(moveItemTo(item, vault, false, item.maxStackSize));
+    dispatch(moveItemTo(item, vault, false, item.amount));
     hideItemPopup();
   });
   useHotkey('c', t('Compare.ButtonHelp'), () => {
@@ -53,18 +53,26 @@ export default function DesktopItemActions({
       dispatch(addCompareItem(item));
     }
   });
+  useHotkey('i', t('MovePopup.InfuseTitle'), (e: KeyboardEvent) => {
+    if (item.infusable) {
+      e.preventDefault();
+      showInfuse(item);
+      hideItemPopup();
+    }
+  });
 
   return (
     <div className={clsx(styles.interaction, { [styles.collapsed]: sidecarCollapsed })}>
       {actionsModel.hasControls && (
-        <div
+        <button
+          type="button"
           className={styles.collapseButton}
           onClick={toggleSidecar}
-          title={t('MovePopup.ToggleSidecar') + ' [K]'}
-          {...sharedButtonProps}
+          title={`${t('MovePopup.ToggleSidecar')} [K]`}
+          aria-keyshortcuts="k"
         >
           <AppIcon icon={sidecarCollapsed ? maximizeIcon : minimizeIcon} />
-        </div>
+        </button>
       )}
 
       <ItemAccessoryButtons

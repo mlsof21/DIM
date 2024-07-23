@@ -3,10 +3,10 @@ import { t } from 'app/i18next-t';
 import { locateItem$ } from 'app/inventory/locate-item';
 import { DimStore } from 'app/inventory/store-types';
 import StoreStats from 'app/store-stats/StoreStats';
+import { wrap } from 'app/utils/collections';
 import { useEventBusListener } from 'app/utils/hooks';
-import { wrap } from 'app/utils/util';
-import { motion, PanInfo } from 'framer-motion';
-import { useCallback, useRef, useState } from 'react';
+import { PanInfo, motion } from 'framer-motion';
+import { useCallback, useState } from 'react';
 import { InventoryBucket, InventoryBuckets } from '../inventory/inventory-buckets';
 import { getCurrentStore, getStore, getVault } from '../inventory/stores-helpers';
 import CategoryStrip from './CategoryStrip';
@@ -35,7 +35,6 @@ export default function PhoneStores({ stores, buckets, singleCharacter }: Props)
     direction: 0,
   });
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('Weapons');
-  const detachedLoadoutMenu = useRef<HTMLDivElement>(null);
 
   // Handle scrolling the right store into view when locating an item
   useEventBusListener(
@@ -56,8 +55,8 @@ export default function PhoneStores({ stores, buckets, singleCharacter }: Props)
           itemPop(item);
         }
       },
-      [currentStore?.id, selectedStoreId, singleCharacter]
-    )
+      [currentStore?.id, selectedStoreId, singleCharacter],
+    ),
   );
 
   if (!stores.length || !buckets || !vault || !currentStore) {
@@ -112,19 +111,16 @@ export default function PhoneStores({ stores, buckets, singleCharacter }: Props)
       role="main"
       aria-label={t('Header.Inventory')}
     >
-      <HeaderShadowDiv className="store-row store-header" onTouchStart={(e) => e.stopPropagation()}>
+      <HeaderShadowDiv className="store-row store-header">
         <PhoneStoresHeader
           selectedStore={selectedStore}
           direction={direction}
           stores={headerStores}
-          loadoutMenuRef={detachedLoadoutMenu}
           setSelectedStoreId={(selectedStoreId, direction) =>
             setSelectedStoreId({ selectedStoreId, direction })
           }
         />
       </HeaderShadowDiv>
-
-      <div className="detached" ref={detachedLoadoutMenu} />
 
       <motion.div className="horizontal-swipable" onPanEnd={handleSwipe}>
         <StoresInventory
@@ -185,7 +181,7 @@ function StoresInventory({
         (store.isVault && selectedCategoryId === 'Inventory')) && (
         <StoreStats store={store} style={{ paddingBottom: 8 }} />
       )}
-      {showPostmaster && buckets.byCategory['Postmaster'].map(renderBucket)}
+      {showPostmaster && buckets.byCategory.Postmaster.map(renderBucket)}
       {buckets.byCategory[selectedCategoryId].map(renderBucket)}
     </>
   );

@@ -19,22 +19,23 @@
 }
 
 .actionButton {
+  composes: resetButton from 'app/dim-ui/common.m.scss';
   composes: entry;
-  cursor: pointer;
+
+  &:disabled {
+    filter: contrast(0.5) brightness(0.5);
+    cursor: not-allowed;
+  }
 
   @media (min-width: 541px) {
-    &:hover {
-      background: $orange;
-      color: black;
+    &:hover,
+    &:focus-visible {
+      outline: none;
+      background: var(--theme-accent-primary);
+      color: var(--theme-text-invert);
       :global(.app-icon) {
-        color: black;
+        color: var(--theme-text-invert);
       }
     }
   }
-}
-
-.disabled {
-  filter: contrast(0.5) brightness(0.5);
-  cursor: default;
-  pointer-events: none;
 }

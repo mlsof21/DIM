@@ -5,11 +5,11 @@
  */
 
 const EMPTY_OBJ = Object.freeze({});
-export function emptyObject<T extends Record<string, unknown>>(): T {
+export function emptyObject<T extends Record<string, unknown> | Record<number, unknown>>(): T {
   return EMPTY_OBJ as T;
 }
 
-const EMPTY_ARRAY: readonly unknown[] = Object.freeze<unknown>([]);
+const EMPTY_ARRAY: readonly unknown[] = Object.freeze<unknown[]>([]);
 export function emptyArray<T>(): T[] {
   return EMPTY_ARRAY as T[];
 }

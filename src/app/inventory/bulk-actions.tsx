@@ -1,32 +1,33 @@
+import { settingSelector } from 'app/dim-api/selectors';
 import { t } from 'app/i18next-t';
 import NotificationButton from 'app/notifications/NotificationButton';
 import { showNotification } from 'app/notifications/notifications';
 import { AppIcon, undoIcon } from 'app/shell/icons';
 import { ThunkResult } from 'app/store/types';
+import { errorMessage } from 'app/utils/errors';
 import _ from 'lodash';
+import { canSyncLockState } from './SyncTagLock';
 import { setItemHashTag, setItemTagsBulk } from './actions';
-import { getTag, tagConfig, TagValue } from './dim-item-info';
+import { TagCommand, TagValue, tagConfig } from './dim-item-info';
 import { setItemLockState } from './item-move-service';
 import { DimItem } from './item-types';
-import { itemHashTagsSelector, itemInfosSelector } from './selectors';
+import { getTagSelector, tagSelector } from './selectors';
 
 /**
  * Bulk tag items, with an undo button in a notification.
  */
 export function bulkTagItems(
   itemsToBeTagged: DimItem[],
-  selectedTag: TagValue,
-  notification = true
+  selectedTag: TagCommand,
+  notification = true,
 ): ThunkResult {
   return async (dispatch, getState) => {
-    const appliedTagInfo: { label: string } = tagConfig[selectedTag];
-    const itemInfos = itemInfosSelector(getState());
-    const itemHashTags = itemHashTagsSelector(getState());
+    const getTag = getTagSelector(getState());
 
     // existing tags are later passed to buttonEffect so the notification button knows what to revert
     const previousState = new Map<DimItem, TagValue | undefined>();
     for (const item of itemsToBeTagged) {
-      previousState.set(item, getTag(item, itemInfos, itemHashTags));
+      previousState.set(item, getTag(item));
     }
 
     const [instanced, nonInstanced] = _.partition(itemsToBeTagged, (i) => i.instanced);
@@ -37,8 +38,9 @@ export function bulkTagItems(
           instanced.map((item) => ({
             itemId: item.id,
             tag: selectedTag === 'clear' ? undefined : selectedTag,
-          }))
-        )
+            craftedDate: item.craftedInfo?.craftedDate,
+          })),
+        ),
       );
     }
     for (const item of nonInstanced) {
@@ -46,7 +48,7 @@ export function bulkTagItems(
         setItemHashTag({
           itemHash: item.hash,
           tag: selectedTag === 'clear' ? undefined : selectedTag,
-        })
+        }),
       );
     }
     if (notification) {
@@ -62,7 +64,7 @@ export function bulkTagItems(
                 })
               : t('Filter.BulkTag', {
                   count: itemsToBeTagged.length,
-                  tag: t(appliedTagInfo.label),
+                  tag: t(tagConfig[selectedTag].label),
                 })}
             <NotificationButton
               onClick={async () => {
@@ -72,8 +74,9 @@ export function bulkTagItems(
                       instanced.map((item) => ({
                         itemId: item.id,
                         tag: previousState.get(item),
-                      }))
-                    )
+                        craftedDate: item.craftedInfo?.craftedDate,
+                      })),
+                    ),
                   );
                 }
                 if (nonInstanced.length) {
@@ -82,7 +85,7 @@ export function bulkTagItems(
                       setItemHashTag({
                         itemHash: item.hash,
                         tag: previousState.get(item),
-                      })
+                      }),
                     );
                   }
                 }
@@ -106,7 +109,12 @@ export function bulkTagItems(
  * Bulk lock/unlock items
  */
 export function bulkLockItems(items: DimItem[], locked: boolean): ThunkResult {
-  return async (dispatch) => {
+  return async (dispatch, getState) => {
+    // Don't change lock state for items that are having their lock state synced to their tag
+    const autoLockTagged = settingSelector('autoLockTagged')(getState());
+    items = autoLockTagged
+      ? items.filter((item) => !tagSelector(item)(getState()) || !canSyncLockState(item))
+      : items;
     try {
       for (const item of items) {
         await dispatch(setItemLockState(item, locked));
@@ -121,7 +129,7 @@ export function bulkLockItems(items: DimItem[], locked: boolean): ThunkResult {
       showNotification({
         type: 'error',
         title: locked ? t('Filter.LockAllFailed') : t('Filter.UnlockAllFailed'),
-        body: e.message,
+        body: errorMessage(e),
       });
     }
   };

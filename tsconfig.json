@@ -1,17 +1,13 @@
 {
   "compilerOptions": {
+    "strict": true,
     "esModuleInterop": true,
     "outDir": "./dist/",
     "sourceMap": true,
-    "strictNullChecks": true,
-    "strictBindCallApply": true,
-    "noImplicitAny": true,
-    "suppressImplicitAnyIndexErrors": true,
-    "strictPropertyInitialization": true,
     "module": "ESNext",
     "target": "ESNext",
     "jsx": "preserve",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "forceConsistentCasingInFileNames": true,
@@ -24,11 +20,10 @@
       "data/*": ["src/data/*"],
       "images/*": ["src/images/*"],
       "destiny-icons/*": ["destiny-icons/*"],
-      "locale/*": ["locale/*"],
+      "locale/*": ["src/locale/*"],
       "testing/*": ["src/testing/*"],
-      "docs/*": ["docs/*"],
-      "*.css": ["config/css-stub.js"]
+      "docs/*": ["docs/*"]
     }
   },
-  "include": ["./src/**/*"]
+  "include": ["./src/**/*", "config/feature-flags.ts"]
 }

@@ -1,8 +1,9 @@
 import { PressTip } from 'app/dim-ui/PressTip';
 import Sheet from 'app/dim-ui/Sheet';
 import { t } from 'app/i18next-t';
+import { locateItem } from 'app/inventory/locate-item';
 import { destiny2CoreSettingsSelector, useD2Definitions } from 'app/manifest/selectors';
-import { filterFactorySelector } from 'app/search/search-filter';
+import { filterFactorySelector } from 'app/search/items/item-search-filter';
 import { AppIcon, faCheckCircle, refreshIcon } from 'app/shell/icons';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { withCancel } from 'app/utils/cancel';
@@ -11,21 +12,15 @@ import clsx from 'clsx';
 import chestArmorItem from 'destiny-icons/armor_types/chest.svg';
 import ghostIcon from 'destiny-icons/general/ghost.svg';
 import handCannonIcon from 'destiny-icons/weapons/hand_cannon.svg';
-import produce from 'immer';
+import { produce } from 'immer';
 import React, { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useSubscription } from 'use-subscription';
 import { DefItemIcon } from '../inventory/ItemIcon';
 import { allItemsSelector } from '../inventory/selectors';
-import {
-  artifactModsSelector,
-  collectSocketsToStrip,
-  doStripSockets,
-  SocketKind,
-  StripAction,
-} from './strip-sockets';
-import { stripSocketsQuery$ } from './strip-sockets-actions';
 import styles from './StripSockets.m.scss';
+import { SocketKind, StripAction, collectSocketsToStrip, doStripSockets } from './strip-sockets';
+import { stripSocketsQuery$ } from './strip-sockets-actions';
 
 /**
  * Error, OK, or still in our worklist
@@ -91,7 +86,7 @@ function reducer(state: State, action: UIAction): State {
           cancel: action.cancel,
           cancelling: false,
           socketList: action.socketList,
-          socketStates: Array(action.socketList.length).fill('todo'),
+          socketStates: Array<string>(action.socketList.length).fill('todo'),
         };
       }
       break;
@@ -151,15 +146,15 @@ export default function StripSockets() {
       try {
         await dispatch(
           doStripSockets(selectedSockets, cancelToken, (idx, error) =>
-            stripDispatch({ tag: 'notify_progress', idx, error })
-          )
+            stripDispatch({ tag: 'notify_progress', idx, error }),
+          ),
         );
         stripDispatch({ tag: 'notify_done', success: true });
       } catch {
         stripDispatch({ tag: 'notify_done', success: false });
       }
     },
-    [dispatch, isChoosing]
+    [dispatch, isChoosing],
   );
 
   if (!query) {
@@ -174,7 +169,7 @@ export default function StripSockets() {
         ) : state.tag === 'processing' ? (
           <>
             <span>
-              <AppIcon icon={refreshIcon} spinning={true} />
+              <AppIcon icon={refreshIcon} spinning={true} ariaHidden />
             </span>{' '}
             {t('StripSockets.Running')}
           </>
@@ -197,7 +192,7 @@ export default function StripSockets() {
         disabled={selectedSockets.length === 0}
       >
         <span>
-          <AppIcon icon={faCheckCircle} />{' '}
+          <AppIcon icon={faCheckCircle} ariaHidden />{' '}
           {t('StripSockets.Button', { numSockets: selectedSockets.length })}
         </span>
       </button>
@@ -259,7 +254,11 @@ function StripSocketsProcess({
     <div className={styles.iconList}>
       {socketList.map((socket, idx) => {
         const state = socketStates[idx];
-        const icon = <DefItemIcon itemDef={socket.plugItemDef} />;
+        const icon = (
+          <div onClick={() => locateItem(socket.item)}>
+            <DefItemIcon itemDef={socket.plugItemDef} />
+          </div>
+        );
         const failed = state !== 'ok' && state !== 'todo';
         const key = `${socket.item.index}-${socket.socketIndex}`;
         const className = clsx('item', styles.plug, {
@@ -291,8 +290,6 @@ function StripSocketsChoose({
   const destiny2CoreSettings = useSelector(destiny2CoreSettingsSelector)!;
   const allItems = useSelector(allItemsSelector);
   const filterFactory = useSelector(filterFactorySelector);
-  const artifactMods = useSelector(artifactModsSelector);
-
   const [activeKinds, setActiveKinds] = useState<SocketKind[]>([]);
 
   const socketKinds = useMemo(() => {
@@ -302,14 +299,14 @@ function StripSocketsChoose({
 
     const filterFunc = filterFactory(query);
     const filteredItems = allItems.filter((i) => i.sockets && filterFunc(i));
-    return collectSocketsToStrip(filteredItems, destiny2CoreSettings, defs, artifactMods);
-  }, [allItems, artifactMods, defs, destiny2CoreSettings, filterFactory, query]);
+    return collectSocketsToStrip(filteredItems, destiny2CoreSettings, defs);
+  }, [allItems, defs, destiny2CoreSettings, filterFactory, query]);
 
   useEffect(() => {
     reportSockets(
       socketKinds
         ?.filter((k) => k.items && activeKinds.includes(k.kind))
-        .flatMap((k) => k.items!) || []
+        .flatMap((k) => k.items!) || [],
     );
   }, [reportSockets, socketKinds, activeKinds]);
 
@@ -390,7 +387,7 @@ function SocketKindButton({
                 <img src={icon} className={styles.itemTypeIcon} /> {num}
                 <br />
               </React.Fragment>
-            )
+            ),
         )}
       </div>
     </div>

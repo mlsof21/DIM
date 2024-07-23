@@ -1,8 +1,11 @@
 import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
 import { isPlugStatActive } from 'app/utils/item-utils';
 import { getFirstSocketByCategoryHash, isWeaponMasterworkSocket } from 'app/utils/socket-utils';
-import { DamageType, DestinyInventoryItemDefinition } from 'bungie-api-ts/destiny2';
+import { DestinyInventoryItemDefinition } from 'bungie-api-ts/destiny2';
+import enhancedIntrinsics from 'data/d2/crafting-enhanced-intrinsics';
 import { ItemCategoryHashes, SocketCategoryHashes, StatHashes } from 'data/d2/generated-enums';
+import masterworksWithCondStats from 'data/d2/masterworks-with-cond-stats.json';
+import _ from 'lodash';
 import { DimItem, DimMasterwork, DimSockets } from '../item-types';
 
 /**
@@ -13,13 +16,6 @@ import { DimItem, DimMasterwork, DimSockets } from '../item-types';
 
 const maxTier = 10;
 
-const resistanceMods = {
-  1546607977: DamageType.Kinetic,
-  1546607980: DamageType.Void,
-  1546607978: DamageType.Arc,
-  1546607979: DamageType.Thermal,
-};
-
 /**
  * This builds the masterwork info - this isn't whether an item is masterwork, but instead what
  * "type" of masterwork it is, what the kill tracker value is, etc. Exotic weapons can start having
@@ -27,7 +23,7 @@ const resistanceMods = {
  */
 export function buildMasterwork(
   createdItem: DimItem,
-  defs: D2ManifestDefinitions
+  defs: D2ManifestDefinitions,
 ): DimMasterwork | null {
   if (!createdItem.sockets) {
     return null;
@@ -42,7 +38,7 @@ export function buildMasterwork(
 function buildMasterworkInfo(
   createdItem: DimItem,
   sockets: DimSockets,
-  defs: D2ManifestDefinitions
+  defs: D2ManifestDefinitions,
 ): DimMasterwork | null {
   // For crafted weapons, the enhanced intrinsic provides masterwork-like stats
   const masterworkPlug =
@@ -68,27 +64,28 @@ function buildMasterworkInfo(
 
   const stats: DimMasterwork['stats'] = [];
 
+  const primaryMWStatHash =
+    enhancedIntrinsics.has(masterworkPlug.plugDef.hash) ||
+    masterworksWithCondStats.includes(masterworkPlug.plugDef.hash)
+      ? _.maxBy(investmentStats, (stat) => stat.value)?.statTypeHash
+      : undefined;
+
   for (const stat of investmentStats) {
     if (
       !isPlugStatActive(
         createdItem,
         masterworkPlug.plugDef,
         stat.statTypeHash,
-        stat.isConditionallyActive
+        stat.isConditionallyActive,
       )
     ) {
       continue;
-    }
-    if (!createdItem.element && createdItem.bucket?.sort === 'Armor') {
-      createdItem.element =
-        Object.values(defs.DamageType.getAll()).find(
-          (damageType) => damageType.enumValue === resistanceMods[stat.statTypeHash]
-        ) ?? null;
     }
     stats.push({
       hash: stat.statTypeHash,
       name: defs.Stat.get(stat.statTypeHash).displayProperties.name,
       value: masterworkPlug.stats?.[stat.statTypeHash] || 0,
+      isPrimary: primaryMWStatHash === undefined || primaryMWStatHash === stat.statTypeHash,
     });
   }
 
@@ -105,7 +102,7 @@ function buildMasterworkInfo(
 export function isValidMasterworkStat(
   defs: D2ManifestDefinitions,
   itemDef: DestinyInventoryItemDefinition,
-  statHash: number
+  statHash: number,
 ) {
   // Bows have a charge time stat that nobody asked for
   if (

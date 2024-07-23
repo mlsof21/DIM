@@ -1,7 +1,9 @@
 import ClassIcon from 'app/dim-ui/ClassIcon';
 import { t } from 'app/i18next-t';
 import SearchBar from 'app/search/SearchBar';
-import { uniqBy } from 'app/utils/util';
+import { filterFactorySelector } from 'app/search/items/item-search-filter';
+import { uniqBy } from 'app/utils/collections';
+import clsx from 'clsx';
 import { BucketHashes } from 'data/d2/generated-enums';
 import _ from 'lodash';
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
@@ -10,10 +12,9 @@ import Sheet from '../dim-ui/Sheet';
 import ConnectedInventoryItem from '../inventory/ConnectedInventoryItem';
 import { DimItem } from '../inventory/item-types';
 import { allItemsSelector } from '../inventory/selectors';
-import { filterFactorySelector } from '../search/search-filter';
 import { itemSorterSelector } from '../settings/item-sort';
-import { ItemPickerState } from './item-picker';
 import './ItemPicker.scss';
+import { ItemPickerState } from './item-picker';
 
 export default function ItemPicker({
   prompt,
@@ -21,10 +22,9 @@ export default function ItemPicker({
   sortBy,
   uniqueBy,
   onItemSelected,
-  onCancel,
   onSheetClosed,
 }: ItemPickerState & {
-  onSheetClosed(): void;
+  onSheetClosed: () => void;
 }) {
   const [liveQuery, setQuery] = useState('');
   const query = useDeferredValue(liveQuery);
@@ -34,34 +34,32 @@ export default function ItemPicker({
 
   const onItemSelectedFn = useCallback(
     (item: DimItem, onClose: () => void) => {
-      onItemSelected({ item });
+      onItemSelected(item);
       onClose();
     },
-    [onItemSelected]
+    [onItemSelected],
   );
 
   const onSheetClosedFn = () => {
-    onCancel();
+    onItemSelected(undefined);
     onSheetClosed();
   };
 
   const header = (
     <div>
       <h1>{prompt || t('ItemPicker.ChooseItem')}</h1>
-      <div className="item-picker-search">
-        <SearchBar
-          placeholder={t('ItemPicker.SearchPlaceholder')}
-          onQueryChanged={setQuery}
-          instant
-        />
-      </div>
+      <SearchBar
+        placeholder={t('ItemPicker.SearchPlaceholder')}
+        onQueryChanged={setQuery}
+        instant
+      />
     </div>
   );
 
   // All items, filtered by the pre-filter configured on the item picker
   const filteredItems = useMemo(
     () => (filterItems ? allItems.filter(filterItems) : allItems),
-    [allItems, filterItems]
+    [allItems, filterItems],
   );
   // Further filtered by the search bar in the item picker
   const items = useMemo(() => {
@@ -85,7 +83,7 @@ export default function ItemPicker({
       freezeInitialHeight={true}
     >
       {({ onClose }) => (
-        <div className="sub-bucket">
+        <div className={clsx('sub-bucket', 'item-picker-grid')}>
           {items.map((item) => (
             <ItemPickerItem
               key={item.index}
@@ -111,7 +109,7 @@ function ItemPickerItem({
 }) {
   const handleClick = useCallback(
     () => onItemSelectedFn(item, onClose),
-    [item, onClose, onItemSelectedFn]
+    [item, onClose, onItemSelectedFn],
   );
 
   return (

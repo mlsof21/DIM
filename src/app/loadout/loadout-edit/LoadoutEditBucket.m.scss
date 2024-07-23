@@ -6,7 +6,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  @include vertical-space-children(var(--item-margin));
+  gap: var(--item-margin);
+  flex: 1;
 
   :global(.stat-row) {
     justify-content: space-between;
@@ -25,8 +26,10 @@
 }
 
 .itemBucket {
+  display: flex;
+  flex-direction: column;
   width: var(--item-size);
-  @include vertical-space-children(var(--item-margin));
+  gap: var(--item-margin);
 }
 
 .items {
@@ -55,33 +58,36 @@
   }
 }
 
-.showFashion {
-  .equipped {
-    :global(.item) {
-      height: calc(var(--item-size) + #{$badge-height} - #{$item-border-width});
-    }
-  }
+@mixin items-width($numItems) {
+  width: calc(#{$numItems} * var(--item-size) + #{$numItems - 1} * var(--item-margin));
 }
 
 .categoryWeapons {
-  width: calc(3 * var(--item-size) + 2 * var(--item-margin));
+  @include items-width(3);
 }
 .categoryArmor {
-  width: calc(5 * var(--item-size) + 4 * var(--item-margin));
+  @include items-width(5);
 }
 .categoryGeneral {
-  width: calc(2 * var(--item-size) + 1 * var(--item-margin));
+  // 2x2 grid
+  @include items-width(2);
+
+  @include phone-portrait {
+    // 4 in a line
+    @include items-width(4);
+  }
 }
 
 .missingItem {
   opacity: 0.3;
+  height: calc(var(--item-size) + #{$badge-height} - #{$item-border-width});
 }
 
 .buttons {
   display: flex;
   flex-flow: row wrap;
-  margin: 4px 0;
-  @include horizontal-space-children(4px);
+  gap: 4px;
+  justify-content: center;
 }
 
 .addButton {
@@ -90,4 +96,14 @@
   color: currentColor;
   width: 100%;
   padding: 0 0 4px 0;
+}
+
+.canDrop {
+  filter: invert(20%);
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.isOver {
+  filter: invert(40%);
+  background-color: rgba(255, 255, 255, 0.4);
 }

@@ -2,41 +2,50 @@ import { Perk } from 'app/clarity/descriptions/descriptionInterface';
 import { clarityDescriptionsSelector } from 'app/clarity/selectors';
 import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
 import { settingSelector } from 'app/dim-api/selectors';
+import { t } from 'app/i18next-t';
+import { DimItem, DimPlug, PluggableInventoryItemDefinition } from 'app/inventory/item-types';
+import { getStatSortOrder, isAllowedItemStat, isAllowedPlugStat } from 'app/inventory/store/stats';
+import { activityModPlugCategoryHashes } from 'app/loadout/known-values';
+import { isModStatActive } from 'app/loadout/stats';
 import { useD2Definitions } from 'app/manifest/selectors';
-import { EXOTIC_CATALYST_TRAIT, modsWithConditionalStats } from 'app/search/d2-known-values';
-import { DestinyInventoryItemDefinition, ItemPerkVisibility } from 'bungie-api-ts/destiny2';
-import { ItemCategoryHashes, StatHashes } from 'data/d2/generated-enums';
+import { DestinyClass, ItemPerkVisibility } from 'bungie-api-ts/destiny2';
+import { ItemCategoryHashes, StatHashes, TraitHashes } from 'data/d2/generated-enums';
 import perkToEnhanced from 'data/d2/trait-to-enhanced-trait.json';
 import _ from 'lodash';
 import { useSelector } from 'react-redux';
+import modsWithoutDescription from '../../data/d2/mods-with-bad-descriptions.json';
+import { compareBy } from './comparators';
+import { isPlugStatActive } from './item-utils';
+import { LookupTable } from './util-types';
 
-interface DimPlugPerkDescription {
+export interface DimPlugPerkDescription {
   perkHash: number;
   name?: string;
   description?: string;
   requirement?: string;
 }
 
-interface DimPlugDescriptions {
+export interface DimPlugDescriptions {
   perks: DimPlugPerkDescription[];
   communityInsight: Perk | undefined;
 }
 
 // some stats are often referred to using different names
-const statNameAliases = {
+// TODO: these need to be localized?
+const statNameAliases: LookupTable<StatHashes, string[]> = {
   [StatHashes.AimAssistance]: ['Aim Assist'],
   [StatHashes.AmmoCapacity]: ['Magazine Stat'],
   [StatHashes.ReloadSpeed]: ['Reload'],
 };
 
-export const enhancedPerkToRegularPerk = _.mapValues(_.invert(perkToEnhanced), Number);
+const enhancedPerkToRegularPerk = _.mapValues(_.invert(perkToEnhanced), Number);
 
 export function usePlugDescriptions(
-  plug?: DestinyInventoryItemDefinition,
+  plug?: PluggableInventoryItemDefinition,
   stats?: {
     value: number;
     statHash: number;
-  }[]
+  }[],
 ): DimPlugDescriptions {
   const defs = useD2Definitions();
   const allClarityDescriptions = useSelector(clarityDescriptionsSelector);
@@ -66,7 +75,9 @@ export function usePlugDescriptions(
     for (const stat of stats) {
       const statDef = defs.Stat.get(stat.statHash);
       if (statDef) {
-        const statNames = [statDef.displayProperties.name].concat(statNameAliases[stat.statHash]);
+        const statNames = [statDef.displayProperties.name].concat(
+          statNameAliases[stat.statHash as StatHashes] ?? [],
+        );
         for (const statName of statNames) {
           if (stat.value < 0) {
             statStrings.add(`${stat.value} ${statName}`);
@@ -94,20 +105,8 @@ export function usePlugDescriptions(
         clarityPerk = allClarityDescriptions[regularPerkHash];
       }
     }
-
-    if (clarityPerk && !clarityPerk.statOnly) {
-      // strip out any strings that are used in the Bungie description
-      const communityInsightWithoutBungieStrings = stripUsedStrings(
-        clarityPerk,
-        statAndBungieDescStrings
-      );
-      if (communityInsightWithoutBungieStrings) {
-        // if our stripped community description is truthy, we know it contains at least 1 unique string
-        // we only want to strip out Bungie description strings if we're also showing the Bungie description
-        result.communityInsight = showBungieDescription
-          ? communityInsightWithoutBungieStrings
-          : stripUsedStrings(clarityPerk, statStrings);
-      }
+    if (clarityPerk) {
+      result.communityInsight = clarityPerk;
     }
   }
 
@@ -121,29 +120,17 @@ export function usePlugDescriptions(
 }
 
 function getPerkDescriptions(
-  plug: DestinyInventoryItemDefinition,
+  plug: PluggableInventoryItemDefinition,
   defs: D2ManifestDefinitions,
-  usedStrings: Set<string>
+  usedStrings: Set<string>,
 ): DimPlugPerkDescription[] {
   const results: DimPlugPerkDescription[] = [];
 
   const plugDescription = plug.displayProperties.description || undefined;
 
   function addPerkDescriptions() {
-    // Terrible hack here: Some subclass fragments behave like Charge Harvester, but use a number of hidden perks
-    // (which we can't associate with stats), But we also can't get the relevant classType in here,
-    // so just copy the "-10 to the stat that governs your class ability recharge rate" perk from Charge Harvester.
-    const perks = [...plug.perks];
-    if (
-      plug.hash === modsWithConditionalStats.echoOfPersistence ||
-      plug.hash === modsWithConditionalStats.sparkOfFocus
-    ) {
-      const chargeHarvesterDef = defs.InventoryItem.get(modsWithConditionalStats.chargeHarvester);
-      perks.push(chargeHarvesterDef.perks[1]);
-    }
-
     // filter out things with no displayable text, or that are meant to be hidden
-    for (const perk of perks) {
+    for (const perk of plug.perks) {
       if (perk.perkVisibility === ItemPerkVisibility.Hidden) {
         continue;
       }
@@ -183,7 +170,7 @@ function getPerkDescriptions(
   function addDescriptionAsRequirement() {
     if (plugDescription && !usedStrings.has(plugDescription)) {
       results.push({
-        perkHash: 0,
+        perkHash: -usedStrings.size,
         requirement: plugDescription,
       });
       usedStrings.add(plugDescription);
@@ -192,10 +179,33 @@ function getPerkDescriptions(
   function addDescriptionAsFunctionality() {
     if (plugDescription && !usedStrings.has(plugDescription)) {
       results.push({
-        perkHash: 0,
+        perkHash: -usedStrings.size,
         description: plugDescription,
       });
       usedStrings.add(plugDescription);
+    }
+  }
+  function addTooltipNotifsAsRequirement() {
+    const notifs = plug.tooltipNotifications
+      .map((notif) => notif.displayString)
+      .filter((str) => !usedStrings.has(str));
+    for (const notif of notifs) {
+      results.push({
+        perkHash: -usedStrings.size,
+        requirement: notif,
+      });
+      usedStrings.add(notif);
+    }
+  }
+  function addCustomDescriptionAsFunctionality() {
+    for (const mod of modsWithoutDescription.Harmonic) {
+      if (plug.hash === mod) {
+        results.push({
+          perkHash: -usedStrings.size,
+          description: t('Mods.HarmonicModDescription'),
+        });
+        usedStrings.add(t('Mods.HarmonicModDescription'));
+      }
     }
   }
 
@@ -203,12 +213,12 @@ function getPerkDescriptions(
   Most plugs use the description field to describe their functionality.
 
   Some plugs (e.g. armor mods) store their functionality in their perk descriptions and use the description
-  field for auxiliary info like requirements and caveats. For these plugs, we want to prioritise strings in the
+  field for auxiliary info like requirements and caveats. For these plugs, we want to prioritize strings in the
   perks and only fall back to the actual description if we don't have any perks.
 
   Other plugs (e.g. Exotic catalysts) always use the description field to store their requirements.
   */
-  if (plug.traitHashes?.includes(EXOTIC_CATALYST_TRAIT)) {
+  if (plug.traitHashes?.includes(TraitHashes.ItemExoticCatalyst)) {
     addPerkDescriptions();
     addDescriptionAsRequirement();
   } else if (plug.itemCategoryHashes?.includes(ItemCategoryHashes.ArmorMods)) {
@@ -216,18 +226,19 @@ function getPerkDescriptions(
 
     // if we already have some displayable perks, this means the description is basically
     // a "requirements" string like "This mod's perks are only active" etc. (see Deep Stone Crypt raid mods)
-    if (results.length > 0) {
+    if (results.length > 0 && activityModPlugCategoryHashes.includes(plug.plug.plugCategoryHash)) {
       addDescriptionAsRequirement();
     } else {
       addDescriptionAsFunctionality();
     }
+  } else if (plugDescription) {
+    addDescriptionAsFunctionality();
   } else {
-    if (plugDescription) {
-      addDescriptionAsFunctionality();
-    } else {
-      addPerkDescriptions();
-    }
+    addPerkDescriptions();
   }
+
+  // Add custom descriptions created for mods who's description is hard to access or an accurate description isn't present
+  addCustomDescriptionAsFunctionality();
 
   // a fallback: if we still don't have any perk descriptions, at least keep the first perk for display.
   // there are mods like this (e.g. Elemental Armaments): no description, and annoyingly all perks are set
@@ -261,35 +272,54 @@ function getPerkDescriptions(
     }
   }
 
+  // Needs to be last added otherwise we can break the above statement causing a description to not be added
+  if (plug.itemCategoryHashes?.includes(ItemCategoryHashes.ArmorMods)) {
+    addTooltipNotifsAsRequirement();
+  }
+
   return results;
 }
 
-function stripUsedStrings(
-  communityInsight: Readonly<Perk>,
-  usedStrings: ReadonlySet<string>
-): Perk | undefined {
-  if (!communityInsight.simpleDescription) {
-    return;
-  }
+export function getPlugDefStats(
+  plugDef: PluggableInventoryItemDefinition,
+  classType: DestinyClass | undefined,
+) {
+  return plugDef.investmentStats
+    .filter(
+      (stat) =>
+        (isAllowedItemStat(stat.statTypeHash) || isAllowedPlugStat(stat.statTypeHash)) &&
+        (classType === undefined || isModStatActive(classType, plugDef.hash, stat)),
+    )
+    .map((stat) => ({
+      statHash: stat.statTypeHash,
+      value: stat.value,
+    }))
+    .sort(compareBy((stat) => getStatSortOrder(stat.statHash)));
+}
 
-  // todo: only rebuild these arrays if they contain a duplicate line
-
-  const simpleDescription = communityInsight.simpleDescription.map((line) =>
-    line.lineText
-      ? {
-          ...line,
-          lineText: line.lineText.filter(
-            (content) => !content.text || !usedStrings.has(content.text)
+export function getDimPlugStats(item: DimItem, plug: DimPlug) {
+  if (plug.stats) {
+    return Object.entries(plug.stats)
+      .map(([statHash, value]) => ({
+        statHash: parseInt(statHash, 10),
+        value,
+      }))
+      .filter(
+        (stat) =>
+          // Item stats are only shown if the item can actually benefit from them
+          ((isAllowedItemStat(stat.statHash) &&
+            item.stats?.some((itemStat) => itemStat.statHash === stat.statHash)) ||
+            isAllowedPlugStat(stat.statHash)) &&
+          isPlugStatActive(
+            item,
+            plug.plugDef,
+            stat.statHash,
+            Boolean(
+              plug.plugDef.investmentStats.find((s) => s.statTypeHash === stat.statHash)
+                ?.isConditionallyActive,
+            ),
           ),
-        }
-      : line
-  );
-  if (!simpleDescription.some((line) => line.lineText?.length)) {
-    return;
+      )
+      .sort(compareBy((stat) => getStatSortOrder(stat.statHash)));
   }
-
-  return {
-    ...communityInsight,
-    simpleDescription,
-  };
 }

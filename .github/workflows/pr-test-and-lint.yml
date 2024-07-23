@@ -2,7 +2,6 @@ name: PR Test & Lint
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
     paths-ignore:
       - 'docs/**'
 
@@ -15,48 +14,54 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-          cache: yarn
+          node-version-file: '.nvmrc'
+          cache: pnpm
 
       - name: Install
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: Jest Test (Forked)
-        if: github.event.pull_request.head.repo.full_name != github.repository
-        run: yarn jest
-
-      - name: Jest Test (Non-Forked)
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        run: yarn jest --json --outputFile="jest.results.json"
-        continue-on-error: true
-
-      - name: Jest Annotations & Coverage (Non-Forked)
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: mattallty/jest-github-action@v1.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Cache Manifest
+        id: destiny-manifest
+        uses: actions/cache@v4
         with:
-          coverage-comment: false
-          test-command: "echo done"
+          path: manifest-cache
+          key: destiny-manifest-${{ github.run_id }}
+          restore-keys: |
+            destiny-manifest
+
+      - name: Jest Test
+        run: pnpm test
+        env:
+          CLEAN_MANIFEST_CACHE: true
+
+      - uses: actions/upload-artifact@v3  # upload test results
+        if: success() || failure()        # run this step even if previous step failed
+        with:
+          name: test-results
+          path: junit.xml
 
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-          cache: yarn
+          node-version-file: '.nvmrc'
+          cache: pnpm
 
       - name: Cache ESLint
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         env:
           cache-name: cache-eslint
         with:
@@ -67,21 +72,26 @@ jobs:
             ${{ runner.os }}-${{ env.cache-name }}-
 
       - name: Install
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Prettier
+        run: pnpm lint:prettier
+
+      - name: StyleLint
+        run: pnpm lint:stylelint
 
       - name: ESLint (Forked)
-        if: github.event.pull_request.head.repo.full_name != github.repository
-        run: yarn lintcached
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository || github.actor == 'dependabot[bot]' }}
+        run: pnpm lintcached
 
       - name: Save ESLint Report JSON (Non-Forked)
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        run: yarn lint-report:cached
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+        run: pnpm lint-report:cached
         continue-on-error: true
 
       - name: Annotate ESLint Results
-        if: github.event.pull_request.head.repo.full_name == github.repository
-        uses: ataylorme/eslint-annotate-action@1.2.0
-        continue-on-error: true
+        if: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]' }}
+        uses: ataylorme/eslint-annotate-action@v2
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
           report-json: "eslint.results.json"

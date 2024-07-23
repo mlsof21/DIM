@@ -1,4 +1,21 @@
-export const D2SeasonInfo = {
+export const D2SeasonInfo: Record<
+  number,
+  {
+    DLCName: string;
+    seasonName: string;
+    seasonTag: string;
+    season: number;
+    maxLevel: number;
+    powerFloor: number;
+    softCap: number;
+    powerfulCap: number;
+    pinnacleCap: number;
+    releaseDate: string;
+    resetTime: string;
+    numWeeks: number;
+    episode?: number;
+  }
+> = {
   1: {
     DLCName: 'Red War',
     seasonName: 'Red War',
@@ -29,7 +46,7 @@ export const D2SeasonInfo = {
   },
   3: {
     DLCName: 'Warmind',
-    seasonName: 'Warmind',
+    seasonName: 'Resurgence',
     seasonTag: 'warmind',
     season: 3,
     maxLevel: 30,
@@ -53,7 +70,7 @@ export const D2SeasonInfo = {
     pinnacleCap: 600,
     releaseDate: '2018-09-04',
     resetTime: '17:00:00Z',
-    numWeeks: 13,
+    numWeeks: 12,
   },
   5: {
     DLCName: 'Black Armory',
@@ -67,7 +84,7 @@ export const D2SeasonInfo = {
     pinnacleCap: 650,
     releaseDate: '2018-11-27',
     resetTime: '17:00:00Z',
-    numWeeks: 12,
+    numWeeks: 14,
   },
   6: {
     DLCName: "Joker's Wild",
@@ -81,7 +98,7 @@ export const D2SeasonInfo = {
     pinnacleCap: 700,
     releaseDate: '2019-03-05',
     resetTime: '17:00:00Z',
-    numWeeks: 14,
+    numWeeks: 13,
   },
   7: {
     DLCName: 'Penumbra',
@@ -95,7 +112,7 @@ export const D2SeasonInfo = {
     pinnacleCap: 750,
     releaseDate: '2019-06-04',
     resetTime: '17:00:00Z',
-    numWeeks: 13,
+    numWeeks: 17,
   },
   8: {
     DLCName: 'Shadowkeep',
@@ -253,8 +270,8 @@ export const D2SeasonInfo = {
   },
   19: {
     DLCName: '',
-    seasonName: 'Season of [Redacted]',
-    seasonTag: '[redacted]',
+    seasonName: 'Season of the Seraph',
+    seasonTag: 'seraph',
     season: 19,
     maxLevel: 50,
     powerFloor: 1350,
@@ -263,24 +280,79 @@ export const D2SeasonInfo = {
     pinnacleCap: 1590,
     releaseDate: '2022-12-06',
     resetTime: '17:00:00Z',
-    numWeeks: -1,
+    numWeeks: 12,
   },
-} as Record<
-  number,
-  {
-    DLCName: string;
-    seasonName: string;
-    seasonTag: string;
-    season: number;
-    maxLevel: number;
-    powerFloor: number;
-    softCap: number;
-    powerfulCap: number;
-    pinnacleCap: number;
-    releaseDate: string;
-    resetTime: string;
-    numWeeks: number;
-  }
->;
+  20: {
+    DLCName: 'Lightfall',
+    seasonName: 'Season of Defiance',
+    seasonTag: 'defiance',
+    season: 20,
+    maxLevel: 50,
+    powerFloor: 1600,
+    softCap: 1750,
+    powerfulCap: 1800,
+    pinnacleCap: 1810,
+    releaseDate: '2023-02-28',
+    resetTime: '17:00:00Z',
+    numWeeks: 12,
+  },
+  21: {
+    DLCName: '',
+    seasonName: 'Season of the Deep',
+    seasonTag: 'deep',
+    season: 21,
+    maxLevel: 50,
+    powerFloor: 1600,
+    softCap: 1750,
+    powerfulCap: 1800,
+    pinnacleCap: 1810,
+    releaseDate: '2023-05-23',
+    resetTime: '17:00:00Z',
+    numWeeks: 13,
+  },
+  22: {
+    DLCName: '',
+    seasonName: 'Season of the Witch',
+    seasonTag: 'witch',
+    season: 22,
+    maxLevel: 50,
+    powerFloor: 1600,
+    softCap: 1750,
+    powerfulCap: 1800,
+    pinnacleCap: 1810,
+    releaseDate: '2023-08-22',
+    resetTime: '17:00:00Z',
+    numWeeks: 14,
+  },
+  23: {
+    DLCName: '',
+    seasonName: 'Season of the Wish',
+    seasonTag: 'wish',
+    season: 23,
+    maxLevel: 50,
+    powerFloor: 1600,
+    softCap: 1750,
+    powerfulCap: 1800,
+    pinnacleCap: 1810,
+    releaseDate: '2023-11-28',
+    resetTime: '17:00:00Z',
+    numWeeks: 27,
+  },
+  24: {
+    DLCName: 'The Final Shape',
+    seasonName: 'Episode: Echoes',
+    seasonTag: 'echoes',
+    season: 24,
+    maxLevel: 50,
+    powerFloor: 1900,
+    softCap: 1940,
+    powerfulCap: 1990,
+    pinnacleCap: 2000,
+    releaseDate: '2024-06-04',
+    resetTime: '17:00:00Z',
+    numWeeks: 18,
+    episode: 1,
+  },
+};
 
-export const D2CalculatedSeason = 18;
+export const D2CalculatedSeason = 24;

@@ -1,118 +1,50 @@
-import { calculateAssumedItemEnergy } from 'app/loadout/armor-upgrade-utils';
+import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
+import { isPluggableItem } from 'app/inventory/store/sockets';
+import { calculateAssumedItemEnergy, isAssumedArtifice } from 'app/loadout/armor-upgrade-utils';
 import {
   activityModPlugCategoryHashes,
   knownModPlugCategoryHashes,
 } from 'app/loadout/known-values';
-import { getItemEnergyType } from 'app/loadout/mod-utils';
-import { MAX_ARMOR_ENERGY_CAPACITY, modsWithConditionalStats } from 'app/search/d2-known-values';
-import { chargedWithLightPlugCategoryHashes } from 'app/search/specialty-modslots';
 import {
-  DestinyClass,
-  DestinyEnergyType,
-  DestinyItemInvestmentStatDefinition,
-} from 'bungie-api-ts/destiny2';
-import { StatHashes } from 'data/d2/generated-enums';
+  MASTERWORK_ARMOR_STAT_BONUS,
+  MAX_ARMOR_ENERGY_CAPACITY,
+  armorStats,
+} from 'app/search/d2-known-values';
+import { filterMap } from 'app/utils/collections';
+import { compareBy } from 'app/utils/comparators';
 import _ from 'lodash';
 import { DimItem, PluggableInventoryItemDefinition } from '../../inventory/item-types';
 import {
   getModTypeTagByPlugCategoryHash,
   getSpecialtySocketMetadatas,
 } from '../../utils/item-utils';
-import { ProcessArmorSet, ProcessItem, ProcessMod } from '../process-worker/types';
-import { ArmorEnergyRules, ArmorSet, ArmorStats, ItemGroup } from '../types';
+import { AutoModData, ProcessArmorSet, ProcessItem, ProcessMod } from '../process-worker/types';
+import {
+  ArmorEnergyRules,
+  ArmorSet,
+  AutoModDefs,
+  ItemGroup,
+  artificeSocketReusablePlugSetHash,
+  artificeStatBoost,
+  generalSocketReusablePlugSetHash,
+  majorStatBoost,
+  minorStatBoost,
+} from '../types';
 
 export function mapArmor2ModToProcessMod(mod: PluggableInventoryItemDefinition): ProcessMod {
   const processMod: ProcessMod = {
     hash: mod.hash,
-    plugCategoryHash: mod.plug.plugCategoryHash,
-    energy: mod.plug.energyCost && {
-      type: mod.plug.energyCost.energyType,
-      val: mod.plug.energyCost.energyCost,
-    },
-    investmentStats: mod.investmentStats,
+    energyCost: mod.plug.energyCost?.energyCost ?? 0,
   };
 
   if (
-    activityModPlugCategoryHashes.includes(processMod.plugCategoryHash) ||
-    !knownModPlugCategoryHashes.includes(processMod.plugCategoryHash)
+    activityModPlugCategoryHashes.includes(mod.plug.plugCategoryHash) ||
+    !knownModPlugCategoryHashes.includes(mod.plug.plugCategoryHash)
   ) {
     processMod.tag = getModTypeTagByPlugCategoryHash(mod.plug.plugCategoryHash);
   }
 
   return processMod;
-}
-
-export function isModStatActive(
-  characterClass: DestinyClass,
-  plugHash: number,
-  stat: DestinyItemInvestmentStatDefinition,
-  lockedMods: PluggableInventoryItemDefinition[]
-): boolean {
-  if (!stat.isConditionallyActive) {
-    return true;
-  } else if (
-    plugHash === modsWithConditionalStats.powerfulFriends ||
-    plugHash === modsWithConditionalStats.radiantLight
-  ) {
-    // Powerful Friends & Radiant Light
-    // True if another arc charged with light mod is found
-    // Note the this is not entirely correct as another arc mod slotted into the same item would
-    // also trigger it but we don't know that until we try to socket them. Basically it is too hard
-    // to figure that condition out so lets leave it as a known issue for now.
-    return Boolean(
-      lockedMods.find(
-        (mod) =>
-          mod.plug.energyCost?.energyType === DestinyEnergyType.Arc &&
-          chargedWithLightPlugCategoryHashes.includes(mod.plug.plugCategoryHash)
-      )
-    );
-  } else if (
-    plugHash === modsWithConditionalStats.chargeHarvester ||
-    plugHash === modsWithConditionalStats.echoOfPersistence ||
-    plugHash === modsWithConditionalStats.sparkOfFocus
-  ) {
-    // "-10 to the stat that governs your class ability recharge"
-    return (
-      (characterClass === DestinyClass.Hunter && stat.statTypeHash === StatHashes.Mobility) ||
-      (characterClass === DestinyClass.Titan && stat.statTypeHash === StatHashes.Resilience) ||
-      (characterClass === DestinyClass.Warlock && stat.statTypeHash === StatHashes.Recovery)
-    );
-  } else {
-    return true;
-  }
-}
-
-/**
- * This sums up the total stat contributions across mods passed in. These are then applied
- * to the loadouts after all the items base values have been summed. This mimics how mods
- * effect stat values in game and allows us to do some preprocessing.
- */
-export function getTotalModStatChanges(
-  lockedMods: PluggableInventoryItemDefinition[],
-  subclassPlugs: PluggableInventoryItemDefinition[],
-  characterClass: DestinyClass
-) {
-  const totals: ArmorStats = {
-    [StatHashes.Mobility]: 0,
-    [StatHashes.Recovery]: 0,
-    [StatHashes.Resilience]: 0,
-    [StatHashes.Intellect]: 0,
-    [StatHashes.Discipline]: 0,
-    [StatHashes.Strength]: 0,
-  };
-
-  for (const mod of lockedMods.concat(subclassPlugs)) {
-    for (const stat of mod.investmentStats) {
-      if (
-        stat.statTypeHash in totals &&
-        isModStatActive(characterClass, mod.hash, stat, lockedMods)
-      ) {
-        totals[stat.statTypeHash] += stat.value;
-      }
-    }
-  }
-
-  return totals;
 }
 
 /**
@@ -129,7 +61,7 @@ export function mapDimItemToProcessItem({
   armorEnergyRules: ArmorEnergyRules;
   modsForSlot?: PluggableInventoryItemDefinition[];
 }): ProcessItem {
-  const { id, hash, name, isExotic, power, stats: dimItemStats, energy } = dimItem;
+  const { id, hash, name, isExotic, power, stats: dimItemStats } = dimItem;
 
   const statMap: { [statHash: number]: number } = {};
   const capacity = calculateAssumedItemEnergy(dimItem, armorEnergyRules);
@@ -138,7 +70,7 @@ export function mapDimItemToProcessItem({
     for (const { statHash, base } of dimItemStats) {
       let value = base;
       if (capacity === MAX_ARMOR_ENERGY_CAPACITY) {
-        value += 2;
+        value += MASTERWORK_ARMOR_STAT_BONUS;
       }
       statMap[statHash] = value;
     }
@@ -149,30 +81,24 @@ export function mapDimItemToProcessItem({
     ? _.sumBy(modsForSlot, (mod) => mod.plug.energyCost?.energyCost || 0)
     : 0;
 
-  // Bucket specific mods have been validated
-  const energyType = getItemEnergyType(dimItem, armorEnergyRules, modsForSlot);
+  const assumeArtifice = isAssumedArtifice(dimItem, armorEnergyRules);
 
   return {
     id,
     hash,
     name,
     isExotic,
+    isArtifice: assumeArtifice,
     power,
     stats: statMap,
-    energy: energy
-      ? {
-          type: energyType ?? energy.energyType,
-          capacity,
-          val: modsCost,
-        }
-      : undefined,
+    remainingEnergyCapacity: capacity - modsCost,
     compatibleModSeasons: modMetadatas?.flatMap((m) => m.compatibleModTags),
   };
 }
 
 export function hydrateArmorSet(
   processed: ProcessArmorSet,
-  itemsById: Map<string, ItemGroup>
+  itemsById: Map<string, ItemGroup>,
 ): ArmorSet {
   const armor: DimItem[][] = [];
 
@@ -183,6 +109,73 @@ export function hydrateArmorSet(
   return {
     armor,
     stats: processed.stats,
+    armorStats: processed.armorStats,
     statMods: processed.statMods,
   };
+}
+
+export function mapAutoMods(defs: AutoModDefs): AutoModData {
+  const defToAutoMod = (def: PluggableInventoryItemDefinition) => ({
+    hash: def.hash,
+    cost: def.plug.energyCost?.energyCost ?? 0,
+  });
+  const defToArtificeMod = (def: PluggableInventoryItemDefinition) => ({
+    hash: def.hash,
+  });
+  return {
+    artificeMods: _.mapValues(defs.artificeMods, defToArtificeMod),
+    generalMods: _.mapValues(defs.generalMods, (modsForStat) =>
+      _.mapValues(modsForStat, defToAutoMod),
+    ),
+  };
+}
+
+/**
+ * Build the automatically pickable mods for the store.
+ * FIXME: Bungie created cheap copies of some mods, but they don't have stats, so
+ * this code will not extract the reduced-cost copies even if they become available.
+ * Re-evaluate this in future seasons if general mods can be affected by artifact cost reductions.
+ */
+export function getAutoMods(defs: D2ManifestDefinitions, allUnlockedPlugs: Set<number>) {
+  const autoMods: AutoModDefs = { generalMods: {}, artificeMods: {} };
+  // Only consider plugs that give stats
+  const mapPlugSet = (plugSetHash: number) =>
+    filterMap(defs.PlugSet.get(plugSetHash)?.reusablePlugItems ?? [], (plugEntry) => {
+      const def = defs.InventoryItem.get(plugEntry.plugItemHash);
+      return isPluggableItem(def) && def.investmentStats?.length ? def : undefined;
+    });
+  const generalPlugSet = mapPlugSet(generalSocketReusablePlugSetHash);
+  const artificePlugSet = mapPlugSet(artificeSocketReusablePlugSetHash);
+
+  for (const statHash of armorStats) {
+    // Artifice mods give a small boost in a single stat, so find the mod for that stat
+    const artificeMod = artificePlugSet.find((modDef) =>
+      modDef.investmentStats.some(
+        (stat) => stat.statTypeHash === statHash && stat.value === artificeStatBoost,
+      ),
+    );
+    if (
+      artificeMod &&
+      (artificeMod.plug.energyCost === undefined || artificeMod.plug.energyCost.energyCost === 0)
+    ) {
+      autoMods.artificeMods[statHash] = artificeMod;
+    }
+
+    const findUnlockedModByValue = (value: number) => {
+      const relevantMods = generalPlugSet.filter((def) =>
+        def.investmentStats.find((stat) => stat.statTypeHash === statHash && stat.value === value),
+      );
+      relevantMods.sort(compareBy((def) => -(def.plug.energyCost?.energyCost ?? 0)));
+      const [largeMod, smallMod] = relevantMods;
+      return smallMod && allUnlockedPlugs.has(smallMod.hash) ? smallMod : largeMod;
+    };
+
+    const majorMod = findUnlockedModByValue(majorStatBoost);
+    const minorMod = findUnlockedModByValue(minorStatBoost);
+    if (majorMod && minorMod) {
+      autoMods.generalMods[statHash] = { majorMod, minorMod };
+    }
+  }
+
+  return autoMods;
 }

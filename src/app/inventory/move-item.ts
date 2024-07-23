@@ -1,33 +1,36 @@
-import { getCurrentHub, startTransaction } from '@sentry/browser';
+import { startSpan } from '@sentry/browser';
 import { settingSelector } from 'app/dim-api/selectors';
 import { t } from 'app/i18next-t';
-import { showItemPicker } from 'app/item-picker/item-picker';
+import { ShowItemPickerFn } from 'app/item-picker/item-picker';
 import { hideItemPopup } from 'app/item-popup/item-popup';
 import { ThunkResult } from 'app/store/types';
 import { CanceledError, neverCanceled, withCancel } from 'app/utils/cancel';
 import { DimError } from 'app/utils/dim-error';
+import { errorMessage } from 'app/utils/errors';
 import { itemCanBeEquippedBy } from 'app/utils/item-utils';
 import { errorLog, infoLog } from 'app/utils/log';
 import { PlatformErrorCodes } from 'bungie-api-ts/destiny2';
-import _ from 'lodash';
+import _, { noop } from 'lodash';
 import { showNotification } from '../notifications/notifications';
 import { loadingTracker } from '../shell/loading-tracker';
 import { queueAction } from '../utils/action-queue';
-import { reportException } from '../utils/exceptions';
+import { reportException } from '../utils/sentry';
+import { moveItemNotification } from './MoveNotifications';
 import { updateCharacters } from './d2-stores';
 import { InventoryBucket } from './inventory-buckets';
-import { checkForOverFill, createMoveSession, executeMoveItem } from './item-move-service';
+import { createMoveSession, executeMoveItem } from './item-move-service';
 import { DimItem } from './item-types';
 import { updateManualMoveTimestamp } from './manual-moves';
-import { moveItemNotification } from './MoveNotifications';
 import { currentStoreSelector, storesSelector } from './selectors';
 import { DimStore } from './store-types';
 import { amountOfItem, getCurrentStore, getStore, getVault } from './stores-helpers';
 
+const TAG = 'move';
+
 /**
  * Move the item to the currently active store. Used for double-click action.
  */
-export function moveItemToCurrentStore(item: DimItem, e?: React.MouseEvent): ThunkResult<DimItem> {
+export function moveItemToCurrentStore(item: DimItem, e?: React.MouseEvent): ThunkResult {
   return async (dispatch, getState) => {
     e?.stopPropagation();
 
@@ -43,27 +46,32 @@ export function moveItemToCurrentStore(item: DimItem, e?: React.MouseEvent): Thu
 /**
  * Show an item picker dialog, and then pull the selected item to the current store.
  */
-export function pullItem(storeId: string, bucket: InventoryBucket): ThunkResult {
+export function pullItem(
+  storeId: string,
+  bucket: InventoryBucket,
+  showItemPicker: ShowItemPickerFn,
+): ThunkResult {
   return async (dispatch, getState) => {
     const store = getStore(storesSelector(getState()), storeId)!;
-    try {
-      const { item } = await showItemPicker({
-        filterItems: (item) => item.bucket.hash === bucket.hash && itemCanBeEquippedBy(item, store),
-        prompt: t('MovePopup.PullItem', {
-          bucket: bucket.name,
-          store: store.name,
-        }),
-      });
 
+    const item = await showItemPicker({
+      filterItems: (item) => item.bucket.hash === bucket.hash && itemCanBeEquippedBy(item, store),
+      prompt: t('MovePopup.PullItem', {
+        bucket: bucket.name,
+        store: store.name,
+      }),
+    });
+
+    if (item) {
       await dispatch(moveItemTo(item, store));
-    } catch (e) {}
+    }
   };
 }
 
 /**
- * Drop a dragged item
+ * Drop a dragged item.
  */
-export function dropItem(item: DimItem, storeId: string, equip = false): ThunkResult<DimItem> {
+export function dropItem(item: DimItem, storeId: string, equip = false): ThunkResult {
   return async (dispatch, getState) => {
     const store = getStore(storesSelector(getState()), storeId)!;
     return dispatch(moveItemTo(item, store, equip, item.amount));
@@ -72,106 +80,102 @@ export function dropItem(item: DimItem, storeId: string, equip = false): ThunkRe
 
 /**
  * Move the item to the specified store. Equip it if equip is true.
+ * This function needs to handle displaying any errors itself - it should not reject.
  */
 export function moveItemTo(
   item: DimItem,
   store: DimStore,
   equip = false,
-  amount: number = item.amount
-): ThunkResult<DimItem> {
+  amount: number = item.amount,
+): ThunkResult {
   return async (dispatch, getState) => {
     const currentStore = currentStoreSelector(getState())!;
     const singleCharacterSetting = settingSelector('singleCharacter')(getState());
-    const transaction = startTransaction({ name: 'moveItemTo' });
-    // set the transaction on the scope so it picks up any errors
-    getCurrentHub()?.configureScope((scope) => scope.setSpan(transaction));
-
-    hideItemPopup();
-    if (
-      item.location.inPostmaster
-        ? !item.canPullFromPostmaster
-        : item.notransfer && item.owner !== store.id
-    ) {
-      throw new DimError('Help.CannotMove');
-    }
-
-    if (item.owner === store.id && !item.location.inPostmaster && item.equipped === equip) {
-      return item;
-    }
-
-    // In single character mode dropping something from the "vault" back on the "vault" shouldn't move anything
-    if (singleCharacterSetting && store.isVault && item.owner !== currentStore.id) {
-      return item;
-    }
-
-    const moveAmount = amount || 1;
-    const reload = item.equipped || equip;
-    try {
-      const stores = storesSelector(getState());
-
-      if ($featureFlags.debugMoves) {
-        infoLog(
-          'move',
-          'User initiated move:',
-          moveAmount,
-          item.name,
-          item.type,
-          'to',
-          store.name,
-          'from',
-          getStore(stores, item.owner)!.name
-        );
-      }
-
-      // We mark this *first*, because otherwise things observing state (like farming) may not see this
-      // in time.
-      updateManualMoveTimestamp(item);
-
-      const [cancelToken, cancel] = withCancel();
-      const moveSession = createMoveSession(cancelToken, [item]);
-
-      const movePromise = queueAction(() =>
-        loadingTracker.addPromise(
-          (async () => {
-            const result = await dispatch(
-              executeMoveItem(item, store, { equip, amount: moveAmount }, moveSession)
-            );
-            dispatch(checkForOverFill());
-            return result;
-          })()
-        )
-      );
-      showNotification(moveItemNotification(item, store, movePromise, cancel));
-
-      item = await movePromise;
-
-      if (reload) {
-        // TODO: only reload the character that changed?
-        // Refresh light levels and such
-        dispatch(updateCharacters());
-      }
-    } catch (e) {
-      if (e instanceof CanceledError) {
-        return item;
-      }
-
-      errorLog('move', 'error moving item', item.name, 'to', store.name, e);
-      // Some errors aren't worth reporting
+    return startSpan({ name: 'moveItemTo' }, async () => {
+      hideItemPopup();
       if (
-        e instanceof DimError &&
-        (e.code === 'wrong-level' ||
-          e.code === 'no-space' ||
-          e.bungieErrorCode() === PlatformErrorCodes.DestinyCannotPerformActionAtThisLocation)
+        item.location.inPostmaster
+          ? !item.canPullFromPostmaster
+          : item.notransfer && item.owner !== store.id
       ) {
-        // don't report
-      } else {
-        reportException('moveItem', e);
+        // Show an error immediately
+        showNotification(
+          moveItemNotification(item, store, Promise.reject(new DimError('Help.CannotMove')), noop),
+        );
+        return;
       }
-    } finally {
-      transaction?.finish();
-    }
 
-    return item;
+      if (item.owner === store.id && !item.location.inPostmaster && item.equipped === equip) {
+        // Nothing to do!
+        return;
+      }
+
+      // In single character mode dropping something from the "vault" back on the "vault" shouldn't move anything
+      if (singleCharacterSetting && store.isVault && item.owner !== currentStore.id) {
+        return;
+      }
+
+      const moveAmount = amount || 1;
+      const reload = item.equipped || equip;
+      try {
+        const stores = storesSelector(getState());
+
+        if ($featureFlags.debugMoves) {
+          infoLog(
+            TAG,
+            'User initiated move:',
+            moveAmount,
+            item.name,
+            item.type,
+            'to',
+            store.name,
+            'from',
+            getStore(stores, item.owner)!.name,
+          );
+        }
+
+        // We mark this *first*, because otherwise things observing state (like farming) may not see this
+        // in time.
+        updateManualMoveTimestamp(item);
+
+        const [cancelToken, cancel] = withCancel();
+        const moveSession = createMoveSession(cancelToken, [item]);
+
+        const movePromise = queueAction(() =>
+          loadingTracker.addPromise(
+            dispatch(executeMoveItem(item, store, { equip, amount: moveAmount }, moveSession)),
+          ),
+        );
+        showNotification(moveItemNotification(item, store, movePromise, cancel));
+
+        await movePromise;
+
+        if (reload) {
+          // TODO: only reload the character that changed?
+          // Refresh light levels and such
+          dispatch(updateCharacters());
+        }
+      } catch (e) {
+        if (e instanceof CanceledError) {
+          return;
+        }
+
+        errorLog(TAG, 'error moving item', item.name, 'to', store.name, e);
+        // Some errors aren't worth reporting
+        if (
+          e instanceof DimError &&
+          (e.code === 'wrong-level' ||
+            e.code === 'no-space' ||
+            e.bungieErrorCode() === PlatformErrorCodes.DestinyCannotPerformActionAtThisLocation ||
+            e.bungieErrorCode() === PlatformErrorCodes.DestinyNoRoomInDestination ||
+            e.bungieErrorCode() === PlatformErrorCodes.DestinyItemNotFound)
+        ) {
+          // don't report
+        } else {
+          reportException('moveItem', e);
+        }
+      }
+    });
   };
 }
 
@@ -193,7 +197,9 @@ export function consolidate(actionableItem: DimItem, store: DimStore): ThunkResu
               // First move everything into the vault
               const item = s.items.find(
                 (i) =>
-                  store.id !== i.owner && i.hash === actionableItem.hash && !i.location.inPostmaster
+                  store.id !== i.owner &&
+                  i.hash === actionableItem.hash &&
+                  !i.location.inPostmaster,
               );
               if (item) {
                 const amount = amountOfItem(s, actionableItem);
@@ -205,7 +211,7 @@ export function consolidate(actionableItem: DimItem, store: DimStore): ThunkResu
             if (!store.isVault) {
               const vault = getVault(storesSelector(getState()))!;
               const item = vault.items.find(
-                (i) => i.hash === actionableItem.hash && !i.location.inPostmaster
+                (i) => i.hash === actionableItem.hash && !i.location.inPostmaster,
               );
               if (item) {
                 const amount = amountOfItem(vault, actionableItem);
@@ -221,12 +227,12 @@ export function consolidate(actionableItem: DimItem, store: DimStore): ThunkResu
               title: t('ItemMove.Consolidate', data),
               body: message,
             });
-          } catch (a) {
-            showNotification({ type: 'error', title: actionableItem.name, body: a.message });
-            errorLog('move', 'error consolidating', actionableItem, a);
+          } catch (e) {
+            showNotification({ type: 'error', title: actionableItem.name, body: errorMessage(e) });
+            errorLog(TAG, 'error consolidating', actionableItem, e);
           }
-        })()
-      )
+        })(),
+      ),
     );
 }
 
@@ -273,7 +279,7 @@ export function distribute(actionableItem: DimItem): ThunkResult {
           const vaultIndex = stores.length - 1;
           const vault = stores[vaultIndex];
 
-          deltas.forEach((delta, index) => {
+          for (const [index, delta] of deltas.entries()) {
             if (delta < 0 && index !== vaultIndex) {
               vaultMoves.push({
                 source: stores[index],
@@ -287,7 +293,7 @@ export function distribute(actionableItem: DimItem): ThunkResult {
                 amount: delta,
               });
             }
-          });
+          }
 
           // All moves to vault in parallel, then all moves to targets in parallel
           async function applyMoves(moves: Move[]) {
@@ -298,8 +304,8 @@ export function distribute(actionableItem: DimItem): ThunkResult {
                   item,
                   move.target,
                   { equip: false, amount: move.amount },
-                  moveSession
-                )
+                  moveSession,
+                ),
               );
             }
           }
@@ -311,11 +317,11 @@ export function distribute(actionableItem: DimItem): ThunkResult {
               type: 'success',
               title: t('ItemMove.Distributed', { name: actionableItem.name }),
             });
-          } catch (a) {
-            showNotification({ type: 'error', title: actionableItem.name, body: a.message });
-            errorLog('move', 'error distributing', actionableItem, a);
+          } catch (e) {
+            showNotification({ type: 'error', title: actionableItem.name, body: errorMessage(e) });
+            errorLog(TAG, 'error distributing', actionableItem, e);
           }
-        })()
-      )
+        })(),
+      ),
     );
 }

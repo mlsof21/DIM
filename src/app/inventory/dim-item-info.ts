@@ -1,12 +1,14 @@
 import { ItemAnnotation, ItemHashTag } from '@destinyitemmanager/dim-api-types';
 import { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import { tl } from 'app/i18next-t';
-import { RootState, ThunkResult } from 'app/store/types';
+import { I18nKey, tl } from 'app/i18next-t';
+import { ThunkResult } from 'app/store/types';
+import { filterMap } from 'app/utils/collections';
+import { infoLog, warnLog } from 'app/utils/log';
 import _ from 'lodash';
 import { archiveIcon, banIcon, boltIcon, heartIcon, tagIcon } from '../shell/icons';
-import { tagCleanup } from './actions';
+import { setItemNote, setItemTag, tagCleanup } from './actions';
 import { DimItem } from './item-types';
-import { itemHashTagsSelector, itemInfosSelector } from './selectors';
+import { itemInfosSelector } from './selectors';
 import { DimStore } from './store-types';
 
 // sortOrder: orders items within a bucket, ascending
@@ -48,16 +50,8 @@ export const tagConfig = {
   },
 };
 
-export type TagValue = keyof typeof tagConfig | 'clear' | 'lock' | 'unlock';
-
-const tagValueStrings = [...Object.keys(tagConfig), 'clear', 'lock', 'unlock'];
-
-/**
- * Helper function to check if a string is TagValue type and declare it as one.
- */
-export function isTagValue(value: string): value is TagValue {
-  return tagValueStrings.includes(value);
-}
+export type TagValue = keyof typeof tagConfig;
+export type TagCommand = TagValue | 'clear';
 
 /**
  * Priority order for which items should get moved off a character (into the vault or another character)
@@ -94,11 +88,26 @@ export const vaultDisplacePriority: (TagValue | 'none')[] = [
   'archive',
 ];
 
-export type ItemInfos = { [itemId: string]: ItemAnnotation };
+/**
+ * Priority order for which items should get chosen to replace an equipped item.
+ * Tag values earlier in this list are more likely to be chosen.
+ */
+export const equipReplacePriority: (TagValue | 'none')[] = [
+  'favorite',
+  'keep',
+  'none',
+  'infuse',
+  'junk',
+  'archive',
+];
+
+export interface ItemInfos {
+  [itemId: string]: ItemAnnotation;
+}
 
 export interface TagInfo {
   type?: TagValue;
-  label: string;
+  label: I18nKey;
   sortOrder?: number;
   displacePriority?: number;
   hotkey?: string;
@@ -107,6 +116,8 @@ export interface TagInfo {
 
 // populate tag list from tag config info
 export const itemTagList: TagInfo[] = Object.values(tagConfig);
+
+export const vaultGroupTagOrder = filterMap(itemTagList, (tag) => tag.type);
 
 export const itemTagSelectorList: TagInfo[] = [
   { label: tl('Tags.TagItem') },
@@ -129,21 +140,63 @@ export function cleanInfos(stores: DimStore[]): ThunkResult {
       return;
     }
 
+    const infosWithCraftedDate = Object.values(infos).filter((i) => i.craftedDate);
+    const infosByCraftedDate = _.keyBy(infosWithCraftedDate, (i) => i.craftedDate!);
+
+    let maxItemId = 0n;
+
     // Tags/notes are stored keyed by instance ID. Start with all the keys of the
     // existing tags and notes and remove the ones that are still here, and the rest
     // should be cleaned up because they refer to deleted items.
     const cleanupIds = new Set(Object.keys(infos));
     for (const store of stores) {
       for (const item of store.items) {
+        const itemId = BigInt(item.id);
+        if (itemId > maxItemId) {
+          maxItemId = itemId;
+        }
         const info = infos[item.id];
         if (info && (info.tag !== undefined || info.notes?.length)) {
           cleanupIds.delete(item.id);
+        } else if (item.craftedInfo?.craftedDate) {
+          // Double-check crafted items - we may have them under a different ID.
+          // If so, patch up the data by re-tagging them under the new ID.
+          // We'll delete the old item's info, but the new infos will be saved.
+          const craftedInfo = infosByCraftedDate[item.craftedInfo.craftedDate];
+          if (craftedInfo) {
+            if (craftedInfo.tag) {
+              dispatch(
+                setItemTag({
+                  itemId: item.id,
+                  tag: craftedInfo.tag,
+                  craftedDate: item.craftedInfo.craftedDate,
+                }),
+              );
+            }
+            if (craftedInfo.notes) {
+              dispatch(
+                setItemNote({
+                  itemId: item.id,
+                  note: craftedInfo.notes,
+                  craftedDate: item.craftedInfo.craftedDate,
+                }),
+              );
+            }
+          }
         }
       }
     }
 
     if (cleanupIds.size > 0) {
-      dispatch(tagCleanup(Array.from(cleanupIds)));
+      const eligibleCleanupIds = Array.from(cleanupIds).filter((id) => BigInt(id) < maxItemId);
+      if (cleanupIds.size > eligibleCleanupIds.length) {
+        warnLog(
+          'cleanInfos',
+          `${cleanupIds.size - eligibleCleanupIds.length} infos have IDs newer than the newest ID in inventory`,
+        );
+      }
+      infoLog('cleanInfos', `Purging tag/notes from ${eligibleCleanupIds.length} deleted items`);
+      dispatch(tagCleanup(eligibleCleanupIds));
     }
   };
 }
@@ -153,7 +206,7 @@ export function getTag(
   itemInfos: ItemInfos,
   itemHashTags?: {
     [itemHash: string]: ItemHashTag;
-  }
+  },
 ): TagValue | undefined {
   return item.taggable
     ? (item.instanced ? itemInfos[item.id]?.tag : itemHashTags?.[item.hash]?.tag) || undefined
@@ -165,15 +218,9 @@ export function getNotes(
   itemInfos: ItemInfos,
   itemHashTags?: {
     [itemHash: string]: ItemHashTag;
-  }
+  },
 ): string | undefined {
   return item.taggable
     ? (item.instanced ? itemInfos[item.id]?.notes : itemHashTags?.[item.hash]?.notes) || undefined
     : undefined;
 }
-
-/** given an item, returns a selector which monitors that item's notes */
-export const itemNoteSelector =
-  (item: DimItem) =>
-  (state: RootState): string | undefined =>
-    getNotes(item, itemInfosSelector(state), itemHashTagsSelector(state));

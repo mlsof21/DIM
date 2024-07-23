@@ -1,16 +1,16 @@
 import { t } from 'app/i18next-t';
 import { toggleSearchResults } from 'app/shell/actions';
 import { AppIcon, faList } from 'app/shell/icons';
-import { querySelector, searchResultsOpenSelector } from 'app/shell/selectors';
-import { Portal } from 'app/utils/temp-container';
+import { querySelector, searchResultsOpenSelector, useIsPhonePortrait } from 'app/shell/selectors';
+import { emptyArray } from 'app/utils/empty';
 import { motion } from 'framer-motion';
 import { useCallback } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
 import styles from './MainSearchBarActions.m.scss';
-import { filteredItemsSelector, queryValidSelector } from './search-filter';
-import './search-filter.scss';
+import { searchButtonAnimateVariants } from './SearchBar';
 import SearchResults from './SearchResults';
+import { filteredItemsSelector, queryValidSelector } from './items/item-search-filter';
 
 /**
  * The extra buttons that appear in the main search bar when there are matched items.
@@ -21,6 +21,7 @@ export default function MainSearchBarActions() {
   const filteredItems = useSelector(filteredItemsSelector);
   const searchResultsOpen = useSelector(searchResultsOpenSelector);
   const dispatch = useDispatch();
+  const isPhonePortrait = useIsPhonePortrait();
 
   const location = useLocation();
   const onInventory = location.pathname.endsWith('inventory');
@@ -30,13 +31,13 @@ export default function MainSearchBarActions() {
 
   // We don't have access to the selected store so we'd match multiple characters' worth.
   // Just suppress the count for now
-  const showSearchResults = onInventory;
+  const showSearchResults = onInventory && !isPhonePortrait;
   const showSearchCount = Boolean(
-    queryValid && searchQuery && !onProgress && !onRecords && !onVendors
+    queryValid && searchQuery && !onProgress && !onRecords && !onVendors,
   );
   const handleCloseSearchResults = useCallback(
     () => dispatch(toggleSearchResults(false)),
-    [dispatch]
+    [dispatch],
   );
 
   return (
@@ -44,10 +45,10 @@ export default function MainSearchBarActions() {
       {showSearchCount && (
         <motion.div
           key="count"
-          layout
-          exit={{ scale: 0 }}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
+          variants={searchButtonAnimateVariants}
+          exit="hidden"
+          initial="hidden"
+          animate="shown"
         >
           {showSearchResults ? (
             <button
@@ -69,10 +70,11 @@ export default function MainSearchBarActions() {
         </motion.div>
       )}
 
-      {showSearchResults && searchResultsOpen && (
-        <Portal>
-          <SearchResults items={filteredItems} onClose={handleCloseSearchResults} />
-        </Portal>
+      {searchResultsOpen && (
+        <SearchResults
+          items={queryValid ? filteredItems : emptyArray()}
+          onClose={handleCloseSearchResults}
+        />
       )}
     </>
   );

@@ -1,10 +1,9 @@
 import AnimatedNumber from 'app/dim-ui/AnimatedNumber';
-import ElementIcon from 'app/dim-ui/ElementIcon';
+import { EnergyCostIcon } from 'app/dim-ui/ElementIcon';
 import { t } from 'app/i18next-t';
 import RecoilStat, { recoilValue } from 'app/item-popup/RecoilStat';
 import { getColor, percent } from 'app/shell/formatters';
 import { StatHashes } from 'data/d2/generated-enums';
-import React from 'react';
 import { D1Stat, DimItem } from '../inventory/item-types';
 import { MinimalStat, StatInfo } from './Compare';
 import styles from './CompareStat.m.scss';
@@ -18,7 +17,7 @@ export default function CompareStat({
   stat: StatInfo;
   compareBaseStats?: boolean;
   item: DimItem;
-  setHighlight?(value?: string | number): void;
+  setHighlight: (value?: string | number) => void;
 }) {
   const itemStat = stat.getStat(item);
 
@@ -29,38 +28,30 @@ export default function CompareStat({
     : 0;
 
   return (
-    <div
-      onMouseOver={setHighlight ? () => setHighlight(stat.id) : undefined}
-      className={styles.stat}
-      style={color}
-    >
+    <div onPointerEnter={() => setHighlight(stat.id)} className={styles.stat} style={color}>
       {statValue !== 0 && stat.bar && item.bucket.sort === 'Armor' && (
         <span className={styles.bar}>
           <span style={{ width: percent(statValue / stat.statMaximumValue) }} />
         </span>
       )}
-      <span className={styles.value}>
-        {stat.id === 'EnergyCapacity' && itemStat && item.energy && (
-          <ElementIcon element={item.element} />
-        )}
-        {itemStat?.value !== undefined ? (
-          itemStat.statHash === StatHashes.RecoilDirection ? (
-            <span className={styles.recoil}>
-              <span>{statValue}</span>
-              <RecoilStat value={statValue} />
-            </span>
-          ) : (
-            <AnimatedNumber value={statValue} />
-          )
+      {stat.id === 'EnergyCapacity' && itemStat && item.energy && <EnergyCostIcon />}
+      {itemStat?.value !== undefined ? (
+        itemStat.statHash === StatHashes.RecoilDirection ? (
+          <span className={styles.recoil}>
+            <span>{statValue}</span>
+            <RecoilStat value={statValue} />
+          </span>
         ) : (
-          t('Stats.NotApplicable')
+          <AnimatedNumber value={statValue} />
+        )
+      ) : (
+        t('Stats.NotApplicable')
+      )}
+      {Boolean(itemStat?.value) &&
+        (itemStat as D1Stat).qualityPercentage &&
+        Boolean((itemStat as D1Stat).qualityPercentage!.range) && (
+          <span className={styles.range}>({(itemStat as D1Stat).qualityPercentage!.range})</span>
         )}
-        {Boolean(itemStat?.value) &&
-          (itemStat as D1Stat).qualityPercentage &&
-          Boolean((itemStat as D1Stat).qualityPercentage!.range) && (
-            <span className={styles.range}>({(itemStat as D1Stat).qualityPercentage!.range})</span>
-          )}
-      </span>
     </div>
   );
 }
@@ -69,7 +60,7 @@ export default function CompareStat({
 function statRange(
   stat: (MinimalStat & { qualityPercentage?: { min: number } }) | undefined,
   statInfo: StatInfo,
-  compareBaseStats = false
+  compareBaseStats = false,
 ) {
   if (!stat) {
     return -1;

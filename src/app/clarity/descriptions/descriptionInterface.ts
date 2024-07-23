@@ -1,33 +1,41 @@
+import { DimLanguage } from 'app/i18n';
+
+export type DescriptionClassNames =
+  | 'background'
+  | 'blue'
+  | 'bold'
+  | 'breakSpaces'
+  | 'center'
+  | 'communityDescription'
+  | 'descriptionDivider'
+  | 'enhancedArrow'
+  | 'green'
+  | 'link'
+  | 'purple'
+  | 'pve'
+  | 'pvp'
+  | 'spacer'
+  | 'title'
+  | 'yellow';
+
 export interface LinesContent {
   text?: string;
-  className?: string;
-  linkUrl?: string;
-  linkText?: string;
-  title?: string;
+  classNames?: DescriptionClassNames[];
+  link?: string;
 }
 export interface Line {
-  lineText?: LinesContent[];
-  className?: string;
+  linesContent?: LinesContent[];
+  classNames?: DescriptionClassNames[];
 }
-type PerkType =
-  | 'armorExotic'
-  | 'armorMod'
-  // ---------
-  | 'weaponPerkExotic'
-  | 'weaponFrameExotic'
-  | 'weaponPerk'
-  | 'weaponPerkEnhanced'
-  | 'weaponFrame'
-  | 'weaponMod'
-  | 'weaponCatalystExotic'
-  // ---------
-  | 'ghostMod';
 
+/**
+ * Clarity perk
+ */
 export interface Perk {
   /**
    * Perk hash from inventoryItems
    */
-  id: number;
+  hash: number;
   /**
    * Perk name from inventoryItems
    */
@@ -36,38 +44,15 @@ export interface Perk {
   /**
    * Exotic armor / weapon hash from inventoryItems
    */
-  itemId?: number;
+  itemHash?: number;
   /**
    * Exotic armor / weapon name from inventoryItems
    */
   itemName?: string;
 
-  /**
-   * Basically is this armor mod, exotic weapon perk, catalyst, etc
-   */
-  type: PerkType;
-
-  description: Line[];
-  simpleDescription?: Line[];
-
-  /**
-   * Community gathered stats that are not provided by Bungie
-   */
-  stats?: { [key: string]: any };
-
-  /**
-   * Description with stats only (not needed in DIM)
-   */
-  statOnly?: boolean;
-
-  /**
-   * Then last time perk was updated time in ms (Date.now())
-   */
-  lastUpdate: number;
-  /**
-   * Name of person who updated this perk so we know who to blame
-   */
-  updatedBy: string;
+  descriptions: {
+    [key in DimLanguage]?: Line[];
+  };
 }
 
 export interface ClarityDescription {
@@ -79,7 +64,9 @@ export interface ClarityDescription {
 
 export interface ClarityVersions {
   /**
-   * version format 1.0
+   ** Version format x.y
+   ** x - major version requiring update to DIM
+   ** y - minor version just simple update to description
    */
   descriptions: number;
 }

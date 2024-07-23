@@ -1,13 +1,16 @@
-import { ItemHashTag } from '@destinyitemmanager/dim-api-types';
+import { startSpan } from '@sentry/browser';
+import { handleAuthErrors } from 'app/accounts/actions';
 import { currentAccountSelector } from 'app/accounts/selectors';
 import { t } from 'app/i18next-t';
+import { isInInGameLoadoutForSelector } from 'app/loadout/selectors';
 import type { ItemTierName } from 'app/search/d2-known-values';
 import { RootState, ThunkResult } from 'app/store/types';
 import { CancelToken } from 'app/utils/cancel';
+import { count, filterMap } from 'app/utils/collections';
 import { DimError } from 'app/utils/dim-error';
+import { errorMessage } from 'app/utils/errors';
 import { itemCanBeEquippedBy } from 'app/utils/item-utils';
-import { errorLog, infoLog, warnLog } from 'app/utils/log';
-import { count } from 'app/utils/util';
+import { errorLog, infoLog, timer, warnLog } from 'app/utils/log';
 import { DestinyClass } from 'bungie-api-ts/destiny2';
 import { PlatformErrorCodes } from 'bungie-api-ts/user';
 import { BucketHashes } from 'data/d2/generated-enums';
@@ -16,35 +19,29 @@ import _ from 'lodash';
 import { AnyAction } from 'redux';
 import { ThunkAction } from 'redux-thunk';
 import {
-  equip as d1equip,
   equipItems as d1EquipItems,
   setItemState as d1SetItemState,
   transfer as d1Transfer,
+  equip as d1equip,
 } from '../bungie-api/destiny1-api';
 import {
-  equip as d2equip,
   equipItems as d2EquipItems,
   setLockState as d2SetLockState,
   setTrackedState as d2SetTrackedState,
   transfer as d2Transfer,
+  equip as d2equip,
 } from '../bungie-api/destiny2-api';
 import { chainComparator, compareBy, reverseComparator } from '../utils/comparators';
 import { itemLockStateChanged, itemMoved } from './actions';
 import {
+  TagValue,
   characterDisplacePriority,
-  getTag,
-  ItemInfos,
+  equipReplacePriority,
   vaultDisplacePriority,
 } from './dim-item-info';
 import { DimItem } from './item-types';
 import { getLastManuallyMoved } from './manual-moves';
-import {
-  bucketsSelector,
-  currentStoreSelector,
-  itemHashTagsSelector,
-  itemInfosSelector,
-  storesSelector,
-} from './selectors';
+import { currentStoreSelector, getTagSelector, storesSelector } from './selectors';
 import { DimStore } from './store-types';
 import {
   amountOfItem,
@@ -54,6 +51,8 @@ import {
   getVault,
   spaceLeftForItem,
 } from './stores-helpers';
+
+const TAG = 'move';
 
 /**
  * An object we can use to track state across a "session" of move operations.
@@ -77,7 +76,7 @@ export interface MoveSession {
 export function createMoveSession(
   cancelToken: CancelToken,
   /** Items explicitly involved in the move. */
-  items: DimItem[]
+  items: DimItem[],
 ): MoveSession {
   const involvedItems = new Set<string | number>();
   for (const item of items) {
@@ -113,7 +112,7 @@ export interface Exclusion {
 export function setItemLockState(
   item: DimItem,
   state: boolean,
-  type: 'lock' | 'track' = 'lock'
+  type: 'lock' | 'track' = 'lock',
 ): ThunkResult {
   return async (dispatch, getState) => {
     const account = currentAccountSelector(getState())!;
@@ -156,13 +155,20 @@ function updateItemModel(
   source: DimStore,
   target: DimStore,
   equip: boolean,
-  amount: number = item.amount
+  amount: number = item.amount,
 ): ThunkAction<DimItem, RootState, undefined, AnyAction> {
-  return (dispatch, getState) => {
-    dispatch(itemMoved({ item, source, target, equip, amount }));
-    const stores = storesSelector(getState());
-    return getItemAcrossStores(stores, item) || item;
-  };
+  return (dispatch, getState) =>
+    startSpan({ name: 'updateItemModel' }, () => {
+      const stopTimer = timer(TAG, 'itemMovedUpdate');
+
+      try {
+        dispatch(itemMoved({ item, source, target, equip, amount }));
+        const stores = storesSelector(getState());
+        return getItemAcrossStores(stores, item) || item;
+      } finally {
+        stopTimer();
+      }
+    });
 }
 
 /**
@@ -170,7 +176,7 @@ function updateItemModel(
  */
 function getItemAcrossStores<Item extends DimItem, Store extends DimStore<Item>>(
   stores: Store[],
-  params: DimItem
+  params: DimItem,
 ) {
   for (const store of stores) {
     for (const item of store.items) {
@@ -191,6 +197,7 @@ function getItemAcrossStores<Item extends DimItem, Store extends DimStore<Item>>
  * Finds an item similar to "item" which can be equipped on the item's owner in order to move "item".
  */
 export function getSimilarItem(
+  getState: () => RootState,
   stores: DimStore[],
   item: DimItem,
   {
@@ -200,8 +207,8 @@ export function getSimilarItem(
     exclusions?: readonly Exclusion[];
     /** Don't pick an exotic to equip in this item's place (because we're specifically trying to dequip an exotic) */
     excludeExotic?: boolean;
-  } = {}
-): DimItem | null {
+  } = {},
+): DimItem | undefined {
   const target = getStore(stores, item.owner)!;
 
   // Try each store, preferring getting something from the same character, then vault, then any other character
@@ -215,83 +222,15 @@ export function getSimilarItem(
     }
   });
 
-  let result: DimItem | null = null;
-  sortedStores.find((store) => {
-    result = searchForSimilarItem(item, store, exclusions, target, excludeExotic);
-    return result !== null;
-  });
+  let result: DimItem | undefined;
+  for (const store of sortedStores) {
+    result = searchForSimilarItem(getState, item, store, exclusions, target, excludeExotic);
+    if (result) {
+      break;
+    }
+  }
 
   return result;
-}
-
-// weight "find a replacement item" options, according to their rarity
-const replacementWeighting: Record<ItemTierName, number> = {
-  Legendary: 4,
-  Rare: 3,
-  Uncommon: 2,
-  Common: 1,
-  Exotic: 0,
-  Currency: 0,
-  Unknown: 0,
-};
-
-/**
- * Find an item in store like "item", excluding the exclusions, to be equipped
- * on target.
- * @param exclusions a list of {id, hash} objects that won't be considered for equipping.
- * @param excludeExotic exclude any item matching the equippingLabel of item, used when dequipping an exotic so we can equip an exotic in another slot.
- */
-function searchForSimilarItem(
-  item: DimItem,
-  store: DimStore,
-  exclusions: readonly Exclusion[] | undefined,
-  target: DimStore,
-  excludeExotic: boolean
-): DimItem | null {
-  const exclusionsList = exclusions || [];
-
-  let candidates = store.items.filter(
-    (i) =>
-      itemCanBeEquippedBy(i, target) &&
-      i.location.hash === item.location.hash &&
-      !i.equipped &&
-      // Not the same item
-      i.id !== item.id &&
-      // Not on the exclusion list
-      !exclusionsList.some((item) => item.id === i.id && item.hash === i.hash)
-  );
-
-  if (!candidates.length) {
-    return null;
-  }
-
-  if (excludeExotic) {
-    candidates = candidates.filter((c) => c.equippingLabel !== item.equippingLabel);
-  }
-
-  // TODO: unify this value function w/ the others!
-  const sortedCandidates = _.sortBy(candidates, (i) => {
-    let value = replacementWeighting[i.tier];
-    if (item.isExotic && i.isExotic) {
-      value += 5;
-    }
-    if (i.primaryStat) {
-      value += i.primaryStat.value / 1000;
-    }
-    return value;
-  }).reverse();
-
-  return (
-    sortedCandidates.find((result) => {
-      if (result.equippingLabel) {
-        const otherExotic = getOtherExoticThatNeedsDequipping(result, store);
-        // If there aren't other exotics equipped, or the equipped one is the one we're dequipping, we're good
-        return !otherExotic || otherExotic.id === item.id;
-      } else {
-        return true;
-      }
-    }) || null
-  );
 }
 
 /**
@@ -305,45 +244,43 @@ export function equipItems(
   items: DimItem[],
   /** A list of items to not consider equipping in order to de-equip an exotic */
   exclusions: readonly Exclusion[],
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<{ [itemInstanceId: string]: PlatformErrorCodes }> {
   return async (dispatch, getState) => {
     const getStores = () => storesSelector(getState());
 
     // Check for (and move aside) exotics
-    const extraItemsToEquip: Promise<DimItem>[] = _.compact(
-      items.map((i) => {
-        if (i.equippingLabel) {
-          const otherExotic = getOtherExoticThatNeedsDequipping(i, store);
-          // If we aren't already equipping into that slot...
-          if (otherExotic && !items.find((i) => i.bucket.hash === otherExotic.bucket.hash)) {
-            const similarItem = getSimilarItem(getStores(), otherExotic, {
-              excludeExotic: true,
-              exclusions,
-            });
-            if (!similarItem) {
-              return Promise.reject(
-                new DimError(
-                  'ItemService.Deequip',
-                  t('ItemService.Deequip', { itemname: otherExotic.name })
-                )
-              );
-            }
-            const target = getStore(getStores(), similarItem.owner)!;
+    const extraItemsToEquip: Promise<DimItem>[] = filterMap(items, (i) => {
+      if (i.equippingLabel) {
+        const otherExotic = getOtherExoticThatNeedsDequipping(i, store);
+        // If we aren't already equipping into that slot...
+        if (otherExotic && !items.find((i) => i.bucket.hash === otherExotic.bucket.hash)) {
+          const similarItem = getSimilarItem(getState, getStores(), otherExotic, {
+            excludeExotic: true,
+            exclusions,
+          });
+          if (!similarItem) {
+            return Promise.reject(
+              new DimError(
+                'ItemService.Deequip',
+                t('ItemService.Deequip', { itemname: otherExotic.name }),
+              ),
+            );
+          }
+          const target = getStore(getStores(), similarItem.owner)!;
 
-            if (store.id === target.id) {
-              return Promise.resolve(similarItem);
-            } else {
-              // If we need to get the similar item from elsewhere, do that first
-              return dispatch(executeMoveItem(similarItem, store, { equip: true }, session)).then(
-                () => similarItem
-              );
-            }
+          if (store.id === target.id) {
+            return Promise.resolve(similarItem);
+          } else {
+            // If we need to get the similar item from elsewhere, do that first
+            return dispatch(executeMoveItem(similarItem, store, { equip: true }, session)).then(
+              () => similarItem,
+            );
           }
         }
-        return undefined;
-      })
-    );
+      }
+      return undefined;
+    });
 
     const extraItems = await Promise.all(extraItemsToEquip);
     items = items.concat(extraItems);
@@ -365,33 +302,44 @@ export function equipItems(
     }
 
     session.cancelToken.checkCanceled();
-    const results = await equipItemsApi(items[0])(
-      currentAccountSelector(getState())!,
-      store,
-      items
-    );
-    // Update our view of each successful item
-    for (const [itemInstanceId, resultCode] of Object.entries(results)) {
-      if (resultCode === PlatformErrorCodes.Success) {
-        const item = items.find((i) => i.id === itemInstanceId);
-        if (item) {
-          dispatch(updateItemModel(item, store, store, true));
+
+    try {
+      const results = await equipItemsApi(items[0])(
+        currentAccountSelector(getState())!,
+        store,
+        items,
+      );
+      // Update our view of each successful item
+      for (const [itemInstanceId, resultCode] of Object.entries(results)) {
+        if (resultCode === PlatformErrorCodes.Success) {
+          const item = items.find((i) => i.id === itemInstanceId);
+          if (item) {
+            dispatch(updateItemModel(item, store, store, true));
+          }
         }
       }
+      return results;
+    } catch (e) {
+      dispatch(handleAuthErrors(e));
+      throw e;
     }
-    return results;
   };
 }
 
 function equipItem(item: DimItem, cancelToken: CancelToken): ThunkResult<DimItem> {
   return async (dispatch, getState) => {
-    const store = getStore(storesSelector(getState()), item.owner)!;
-    if ($featureFlags.debugMoves) {
-      infoLog('equip', 'Equip', item.name, item.type, 'to', store.name);
+    try {
+      const store = getStore(storesSelector(getState()), item.owner)!;
+      if ($featureFlags.debugMoves) {
+        infoLog('equip', 'Equip', item.name, item.type, 'to', store.name);
+      }
+      cancelToken.checkCanceled();
+      await equipApi(item)(currentAccountSelector(getState())!, item);
+      return dispatch(updateItemModel(item, store, store, true));
+    } catch (e) {
+      dispatch(handleAuthErrors(e));
+      throw e;
     }
-    cancelToken.checkCanceled();
-    await equipApi(item)(currentAccountSelector(getState())!, item);
-    return dispatch(updateItemModel(item, store, store, true));
   };
 }
 
@@ -404,11 +352,11 @@ function dequipItem(
   }: {
     /** Don't pick an exotic to equip in this item's place (because we're specifically trying to dequip an exotic) */
     excludeExotic?: boolean;
-  } = { excludeExotic: false }
+  } = { excludeExotic: false },
 ): ThunkResult<DimItem> {
   return async (dispatch, getState) => {
     const stores = storesSelector(getState());
-    const similarItem = getSimilarItem(stores, item, { excludeExotic });
+    const similarItem = getSimilarItem(getState, stores, item, { excludeExotic });
     if (!similarItem) {
       throw new DimError('ItemService.Deequip', t('ItemService.Deequip', { itemname: item.name }));
     }
@@ -429,7 +377,7 @@ function moveToStore(
   store: DimStore,
   equip: boolean,
   amount: number,
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<DimItem> {
   return async (dispatch, getState) => {
     const getStores = () => storesSelector(getState());
@@ -437,7 +385,7 @@ function moveToStore(
 
     if ($featureFlags.debugMoves) {
       item.location.inPostmaster
-        ? infoLog('move', 'Pull', amount, item.name, item.type, 'to', store.name, 'from Postmaster')
+        ? infoLog(TAG, 'Pull', amount, item.name, item.type, 'to', store.name, 'from Postmaster')
         : infoLog(
             'move',
             'Move',
@@ -447,7 +395,7 @@ function moveToStore(
             'to',
             store.name,
             'from',
-            ownerStore.name
+            ownerStore.name,
           );
     }
 
@@ -465,6 +413,7 @@ function moveToStore(
     try {
       await transferApi(item)(currentAccountSelector(getState())!, item, store, amount);
     } catch (e) {
+      dispatch(handleAuthErrors(e));
       // Not sure why this happens - maybe out of sync game state?
       if (
         e instanceof DimError &&
@@ -472,14 +421,6 @@ function moveToStore(
       ) {
         await dispatch(dequipItem(item, session));
         await transferApi(item)(currentAccountSelector(getState())!, item, store, amount);
-      } else if (
-        e instanceof DimError &&
-        e.bungieErrorCode() === PlatformErrorCodes.DestinyItemNotFound
-      ) {
-        // If the item wasn't found, it's probably been moved or deleted in-game. We could try to
-        // reload the profile or load just that item, but API caching means we aren't guaranteed to
-        // get the current view. So instead, we just pretend the move succeeded.
-        warnLog('move', 'Item', item.name, 'was not found - pretending the move succeeded');
       } else {
         throw e;
       }
@@ -502,12 +443,12 @@ function moveToStore(
           overrideLockState,
           'when moving to',
           store.name,
-          'to work around Bungie.net lock state bug'
+          'to work around Bungie.net lock state bug',
         );
         try {
           await dispatch(setItemLockState(item, overrideLockState));
         } catch (e) {
-          errorLog('move', 'Lock state override failed', e);
+          errorLog(TAG, 'Lock state override failed', e);
         }
       })();
     }
@@ -525,7 +466,7 @@ function moveToStore(
 function canEquipExotic(
   item: DimItem,
   store: DimStore,
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<boolean> {
   return async (dispatch) => {
     const otherExotic = getOtherExoticThatNeedsDequipping(item, store);
@@ -538,8 +479,8 @@ function canEquipExotic(
           t('ItemService.ExoticError', {
             itemname: item.name,
             slot: otherExotic.type,
-            error: e.message,
-          })
+            error: errorMessage(e),
+          }),
         );
       }
     } else {
@@ -560,7 +501,7 @@ function getOtherExoticThatNeedsDequipping(item: DimItem, store: DimStore): DimI
   // Find an item that's not in the slot we're equipping, but has a matching equipping label
   return store.items.find(
     (i) =>
-      i.equipped && i.equippingLabel === item.equippingLabel && i.bucket.hash !== item.bucket.hash
+      i.equipped && i.equippingLabel === item.equippingLabel && i.bucket.hash !== item.bucket.hash,
   );
 }
 
@@ -568,7 +509,7 @@ interface MoveContext {
   /** Bucket hash */
   originalItemType: number;
   excludes: readonly Exclusion[];
-  spaceLeft(s: DimStore, i: DimItem): number;
+  spaceLeft: (s: DimStore, i: DimItem) => number;
 }
 
 /**
@@ -592,13 +533,13 @@ function chooseMoveAsideItem(
   getState: () => RootState,
   target: DimStore,
   item: DimItem,
-  moveContext: MoveContext
+  moveContext: MoveContext,
 ): {
   item: DimItem;
   target: DimStore;
 } {
   // Check whether an item cannot or should not be moved
-  function movable(otherItem: DimItem) {
+  function isMovable(otherItem: DimItem) {
     return (
       !otherItem.notransfer &&
       !moveContext.excludes.some((i) => i.id === otherItem.id && i.hash === otherItem.hash)
@@ -617,7 +558,7 @@ function chooseMoveAsideItem(
           (i) =>
             i.bucket.vaultBucket &&
             item.bucket.vaultBucket &&
-            i.bucket.vaultBucket.hash === item.bucket.vaultBucket.hash
+            i.bucket.vaultBucket.hash === item.bucket.vaultBucket.hash,
         )
       : findItemsByBucket(target, item.bucket.hash);
   } catch (e) {
@@ -626,24 +567,24 @@ function chooseMoveAsideItem(
         'move',
         'Item',
         item.name,
-        "has no vault bucket, but we're trying to move aside room in the vault for it"
+        "has no vault bucket, but we're trying to move aside room in the vault for it",
       );
     } else if (target.items.some((i) => !i.bucket.vaultBucket)) {
       errorLog(
         'move',
         'The vault has items with no vault bucket: ',
-        target.items.filter((i) => !i.bucket.vaultBucket).map((i) => i.name)
+        target.items.filter((i) => !i.bucket.vaultBucket).map((i) => i.name),
       );
     }
     throw e;
   }
-  const moveAsideCandidates = allItems.filter(movable);
+  const moveAsideCandidates = allItems.filter(isMovable);
 
   // if there are no candidates at all, fail
   if (moveAsideCandidates.length === 0) {
     throw new DimError(
       'no-space',
-      t('ItemService.NotEnoughRoom', { store: target.name, itemname: item.name })
+      t('ItemService.NotEnoughRoom', { store: target.name, itemname: item.name }),
     ).withError(new DimError('ItemService.NotEnoughRoomGeneral'));
   }
 
@@ -660,8 +601,8 @@ function chooseMoveAsideItem(
             otherItem.hash === i.hash &&
             !otherItem.location.inPostmaster &&
             // Enough space to absorb this stack
-            i.maxStackSize - otherItem.amount >= i.amount
-        )
+            i.maxStackSize - otherItem.amount >= i.amount,
+        ),
       );
     }
     return Boolean(otherStore);
@@ -673,8 +614,8 @@ function chooseMoveAsideItem(
     };
   }
 
-  const itemInfos = itemInfosSelector(getState());
-  const itemHashTags = itemHashTagsSelector(getState());
+  const getTag = getTagSelector(getState());
+  const isInInGameLoadoutFor = isInInGameLoadoutForSelector(getState());
 
   // A cached version of the space-left function
   const cachedSpaceLeft = _.memoize(
@@ -686,69 +627,62 @@ function chooseMoveAsideItem(
       } else {
         return store.id + item.type;
       }
-    }
+    },
   );
-
-  let moveAsideCandidate:
-    | {
-        item: DimItem;
-        target: DimStore;
-      }
-    | undefined;
 
   const vault = getVault(stores)!;
 
   // Iterate through other stores from least recently played to most recently played.
   // The concept is that we prefer filling up the least-recently-played character before even
   // bothering with the others.
-  _.sortBy(
-    otherStores.filter((s) => !s.isVault),
-    (s) => s.lastPlayed.getTime()
-  ).find((targetStore) =>
-    sortMoveAsideCandidatesForStore(
-      moveAsideCandidates,
-      target,
-      targetStore,
-      itemInfos,
-      itemHashTags,
-      item
-    ).find((candidate) => {
-      const spaceLeft = cachedSpaceLeft(targetStore, candidate);
+  let moveAsideCandidate = (() => {
+    const otherCharacters = _.sortBy(
+      otherStores.filter((s) => !s.isVault),
+      (s) => s.lastPlayed.getTime(),
+    );
+    for (const targetStore of otherCharacters) {
+      const sortedCandidates = sortMoveAsideCandidatesForStore(
+        moveAsideCandidates,
+        target,
+        targetStore,
+        getTag,
+        isInInGameLoadoutFor,
+        item,
+      );
+      for (const candidate of sortedCandidates) {
+        const spaceLeft = cachedSpaceLeft(targetStore, candidate);
 
-      if (target.isVault) {
-        // If we're moving from the vault
-        // If the target character has any space, put it there
-        if (candidate.amount <= spaceLeft) {
-          moveAsideCandidate = {
-            item: candidate,
-            target: targetStore,
-          };
-          return true;
-        }
-      } else {
-        // If we're moving from a character
-        // If there's exactly one *slot* left on the vault, and
-        // we're not moving the original item *from* the vault, put
-        // the candidate on another character in order to avoid
-        // gumming up the vault.
-        const openVaultAmount = cachedSpaceLeft(vault, candidate);
-        const openVaultSlotsBeforeMove = Math.floor(openVaultAmount / candidate.maxStackSize);
-        const openVaultSlotsAfterMove = Math.max(
-          0,
-          Math.floor((openVaultAmount - candidate.amount) / candidate.maxStackSize)
-        );
-        if (openVaultSlotsBeforeMove === 1 && openVaultSlotsAfterMove === 0 && spaceLeft) {
-          moveAsideCandidate = {
-            item: candidate,
-            target: targetStore,
-          };
-          return true;
+        if (target.isVault) {
+          // If we're moving from the vault
+          // If the target character has any space, put it there
+          if (candidate.amount <= spaceLeft) {
+            return {
+              item: candidate,
+              target: targetStore,
+            };
+          }
+        } else {
+          // If we're moving from a character
+          // If there's exactly one *slot* left on the vault, and
+          // we're not moving the original item *from* the vault, put
+          // the candidate on another character in order to avoid
+          // gumming up the vault.
+          const openVaultAmount = cachedSpaceLeft(vault, candidate);
+          const openVaultSlotsBeforeMove = Math.floor(openVaultAmount / candidate.maxStackSize);
+          const openVaultSlotsAfterMove = Math.max(
+            0,
+            Math.floor((openVaultAmount - candidate.amount) / candidate.maxStackSize),
+          );
+          if (openVaultSlotsBeforeMove === 1 && openVaultSlotsAfterMove === 0 && spaceLeft) {
+            return {
+              item: candidate,
+              target: targetStore,
+            };
+          }
         }
       }
-
-      return false;
-    })
-  );
+    }
+  })();
 
   // If we're moving off a character (into the vault) and we couldn't find a better match,
   // just try to shove it in the vault, and we'll recursively squeeze something else out of the vault.
@@ -762,7 +696,7 @@ function chooseMoveAsideItem(
   if (!moveAsideCandidate) {
     throw new DimError(
       'no-space',
-      t('ItemService.NotEnoughRoom', { store: target.name, itemname: item.name })
+      t('ItemService.NotEnoughRoom', { store: target.name, itemname: item.name }),
     ).withError(new DimError('ItemService.NotEnoughRoomGeneral'));
   }
 
@@ -794,7 +728,7 @@ function ensureCanMoveToStore(
     reservations: Immutable<MoveReservations>;
     numRetries?: number;
   },
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<boolean> {
   return async (dispatch, getState) => {
     const { excludes = [], reservations = {}, numRetries = 0 } = options;
@@ -846,14 +780,14 @@ function ensureCanMoveToStore(
 
     // How many items need to be moved away from each store (in amount, not stacks)
     const movesNeeded: { [storeId: string]: number } = {};
-    stores.forEach((s) => {
+    for (const s of stores) {
       if (storeReservations[s.id]) {
         movesNeeded[s.id] = Math.max(
           0,
-          storeReservations[s.id] - spaceLeftWithReservations(s, item)
+          storeReservations[s.id] - spaceLeftWithReservations(s, item),
         );
       }
-    });
+    }
 
     if (Object.values(movesNeeded).every((m) => m === 0)) {
       // If there are no moves needed, we're clear to go
@@ -873,15 +807,15 @@ function ensureCanMoveToStore(
       };
 
       // Move starting from the vault (which is always last)
-      const [sourceStoreId] = Object.entries(movesNeeded)
-        .reverse()
-        .find(([_storeId, moveAmount]) => moveAmount > 0)!;
+      const [sourceStoreId] = Object.entries(movesNeeded).findLast(
+        ([_storeId, moveAmount]) => moveAmount > 0,
+      )!;
       const moveAsideSource = getStore(stores, sourceStoreId)!;
       const { item: moveAsideItem, target: moveAsideTarget } = chooseMoveAsideItem(
         getState,
         moveAsideSource,
         item,
-        moveContext
+        moveContext,
       );
 
       if (
@@ -890,7 +824,7 @@ function ensureCanMoveToStore(
       ) {
         const itemtype = moveAsideTarget.isVault
           ? moveAsideItem.destinyVersion === 1
-            ? moveAsideItem.bucket.sort
+            ? moveAsideItem.bucket.sort!
             : ''
           : moveAsideItem.type;
 
@@ -905,7 +839,7 @@ function ensureCanMoveToStore(
                 itemtype,
                 store: moveAsideTarget.name,
                 context: moveAsideTarget.genderName,
-              })
+              }),
         );
       } else {
         // Make one move and start over!
@@ -927,7 +861,7 @@ function ensureCanMoveToStore(
             errorLog(
               'move',
               `Unable to move aside ${moveAsideItem.name} to ${moveAsideTarget.name}. Trying again.`,
-              e
+              e,
             );
             return dispatch(ensureCanMoveToStore(item, store, amount, options, session));
           } else {
@@ -966,7 +900,7 @@ function canEquip(item: DimItem, store: DimStore): void {
  * in an attempt to make a move possible.
  *
  * This is functionally just ensureCanMoveToStore, with an
- * additional accomodation for equips and the one-exotic rule.
+ * additional accommodation for equips and the one-exotic rule.
  */
 function ensureValidTransfer(
   equip: boolean,
@@ -975,7 +909,7 @@ function ensureValidTransfer(
   amount: number,
   excludes: Exclusion[],
   reservations: Immutable<MoveReservations>,
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<boolean> {
   return async (dispatch) => {
     if (equip) {
@@ -1017,7 +951,7 @@ export function executeMoveItem(
     excludes?: Exclusion[];
     reservations?: Immutable<MoveReservations>;
   },
-  session: MoveSession
+  session: MoveSession,
 ): ThunkResult<DimItem> {
   return async (dispatch, getState) => {
     const getStores = () => storesSelector(getState());
@@ -1046,7 +980,7 @@ export function executeMoveItem(
       item.bucket.hash !== BucketHashes.Consumables
     ) {
       try {
-        infoLog('move', 'Try blind move of', item.name, 'to', target.name);
+        infoLog(TAG, 'Try blind move of', item.name, 'to', target.name);
         return await dispatch(moveToStore(item, target, equip, amount, session));
       } catch (e) {
         if (
@@ -1060,7 +994,7 @@ export function executeMoveItem(
             item.name,
             'to',
             target.name,
-            'but the bucket is really full'
+            'but the bucket is really full',
           );
           session.bucketsFullOnCurrentStore.add(item.bucket.hash);
         } else {
@@ -1070,7 +1004,7 @@ export function executeMoveItem(
     }
 
     await dispatch(
-      ensureValidTransfer(equip, target, item, amount, excludes, reservations, session)
+      ensureValidTransfer(equip, target, item, amount, excludes, reservations, session),
     );
 
     // Replace the target store - ensureValidTransfer may have reloaded it
@@ -1083,7 +1017,7 @@ export function executeMoveItem(
         item = await dispatch(moveToStore(item, target, equip, amount, session));
       } else {
         item = await dispatch(
-          executeMoveItem(item, source, { equip, amount, excludes, reservations }, session)
+          executeMoveItem(item, source, { equip, amount, excludes, reservations }, session),
         );
         target = getStore(getStores(), target.id)!;
         source = getStore(getStores(), item.owner)!;
@@ -1139,12 +1073,10 @@ export function sortMoveAsideCandidatesForStore(
   moveAsideCandidates: DimItem[],
   fromStore: DimStore,
   targetStore: DimStore,
-  itemInfos: ItemInfos,
-  itemHashTags: {
-    [itemHash: string]: ItemHashTag;
-  },
+  getTag: (item: DimItem) => TagValue | undefined,
+  isInInGameLoadoutFor: (item: DimItem, ownerId: string) => boolean,
   /** The item we're trying to make space for. May be missing. */
-  item?: DimItem
+  displacer?: DimItem,
 ) {
   // A sort for items to use for ranking *which item to move*
   // aside. The highest ranked items are the most likely to be moved.
@@ -1152,37 +1084,63 @@ export function sortMoveAsideCandidatesForStore(
   // come first in the list.
   const itemValueComparator: (a: DimItem, b: DimItem) => number = reverseComparator(
     chainComparator(
+      // MECHANICAL CONSIDERATIONS RELATED TO MOVING ITEMS
+
       // Try our hardest never to unequip something
-      compareBy((i) => !i.equipped),
-      // prefer same type over everything
-      compareBy((i) => item && i.bucket.hash === item.bucket.hash),
-      // or at least same category
-      compareBy((i) => item && i.bucket.sort === item.bucket.sort),
-      // Always prefer keeping something that was manually moved where it is
-      compareBy((i) => -getLastManuallyMoved(i)),
+      compareBy((displaced) => !displaced.equipped),
+      // prefer same bucket over everything, because that makes space in the correct "pocket"
+      compareBy(
+        (displaced) =>
+          !fromStore.isVault && displacer && displaced.bucket.hash === displacer.bucket.hash,
+      ),
+
+      // TODO: Prefer moving from vault into Inventory (consumables)
+      // TODO: Prefer moving from vault into the bucket with the most free space
+
+      // D1 HAD ENGRAMS MIXED IN WITH INVENTORY
+
       // Engrams prefer to be in the vault, so not-engram is larger than engram
-      compareBy((i) => (fromStore.isVault ? !i.isEngram : i.isEngram)),
+      compareBy((displaced) => (fromStore.isVault ? !displaced.isEngram : displaced.isEngram)),
+
+      // DON'T ANNOY PEOPLE
+
+      // Always prefer keeping something that was manually moved where it is
+      compareBy((displaced) => -getLastManuallyMoved(displaced)),
+
+      // CONVENIENCES RELATED TO WHETHER ITEMS ARE USEFUL, AND TO WHICH CHARACTER
+
+      // Prefer displacing on-char items that AREN'T in their owner's in-game loadouts
+      compareBy(
+        (displaced) => !fromStore.isVault && !isInInGameLoadoutFor(displaced, fromStore.id),
+      ),
+      // prefer displacing a vaulted item to a char with the item in a loadout
+      compareBy(
+        (displaced) => !targetStore.isVault && isInInGameLoadoutFor(displaced, targetStore.id),
+      ),
+      // Prefer moving an item if the owner can't use it
+      compareBy((displaced) => !fromStore.isVault && !itemCanBeEquippedBy(displaced, fromStore)),
       // Prefer moving things the target store can use
-      compareBy((i) => !targetStore.isVault && itemCanBeEquippedBy(i, targetStore)),
-      // Prefer moving things this character can't use
-      compareBy((i) => !fromStore.isVault && !itemCanBeEquippedBy(i, fromStore)),
+      compareBy((displaced) => !targetStore.isVault && itemCanBeEquippedBy(displaced, targetStore)),
+
+      // TRYING TO ESTIMATE USER INTENTION AND ITEM VALUE
+
       // Tagged items sort by orders defined in dim-item-info
-      compareBy((i) => {
-        const tag = getTag(i, itemInfos, itemHashTags);
+      compareBy((displaced) => {
+        const tag = getTag(displaced);
         return -(fromStore.isVault ? vaultDisplacePriority : characterDisplacePriority).indexOf(
-          tag || 'none'
+          tag || 'none',
         );
       }),
       // Prefer moving lower-tier into the vault and higher tier out
       compareBy((i) =>
-        fromStore.isVault ? moveAsideWeighting[i.tier] : -moveAsideWeighting[i.tier]
+        fromStore.isVault ? moveAsideWeighting[i.tier] : -moveAsideWeighting[i.tier],
       ),
       // Prefer keeping higher-stat items on characters
       compareBy(
         (i) =>
-          (i.primaryStat && (fromStore.isVault ? i.primaryStat.value : -i.primaryStat.value)) || 0
-      )
-    )
+          (i.primaryStat && (fromStore.isVault ? i.primaryStat.value : -i.primaryStat.value)) || 0,
+      ),
+    ),
   );
 
   // Sort all candidates
@@ -1191,26 +1149,70 @@ export function sortMoveAsideCandidatesForStore(
 }
 
 /**
- * Check if any bucket in the active store has "overfilled" and trigger a refresh if so.
+ * Find an item in store like "item", excluding the exclusions, to be equipped
+ * on target. Generally used to help with de-equipping item.
+ * @param exclusions a list of {id, hash} objects that won't be considered for equipping.
+ * @param excludeExotic exclude any item matching the equippingLabel of item, used when dequipping an exotic so we can equip an exotic in another slot.
  */
-export function checkForOverFill(): ThunkResult {
-  return async (_dispatch, getState) => {
-    const store = currentStoreSelector(getState());
-    const buckets = bucketsSelector(getState());
+function searchForSimilarItem(
+  getState: () => RootState,
+  item: DimItem,
+  store: DimStore,
+  exclusions: readonly Exclusion[] = [],
+  target: DimStore,
+  excludeExotic: boolean,
+): DimItem | undefined {
+  const candidates = store.items.filter(
+    (i) =>
+      i.location.hash === item.location.hash &&
+      !i.equipped &&
+      // Not the same item
+      i.id !== item.id &&
+      itemCanBeEquippedBy(i, target) &&
+      // Not on the exclusion list
+      !exclusions.some((item) => item.id === i.id && item.hash === i.hash) &&
+      (!excludeExotic || i.equippingLabel !== item.equippingLabel),
+  );
 
-    if (!store || !buckets) {
-      return;
-    }
+  if (!candidates.length) {
+    return undefined;
+  }
 
-    const countByBucket = _.countBy(store.items, (i) => i.location.hash);
-    for (const [bucketHashStr, amount] of Object.entries(countByBucket)) {
-      const bucket = buckets.byHash[parseInt(bucketHashStr, 10)];
-      if (amount > bucket.capacity) {
-        // Request a refresh of the store, this bucket is overfilled
-        // refresh();
-        infoLog('move', 'Bucket', bucket.name, 'overfilled');
-        return;
+  const getTag = getTagSelector(getState());
+
+  // A sort for items to use for ranking which item to use to replace the
+  // already equipped item. The highest ranked items are the most likely to be
+  // used. Note that this is reversed, so higher values (including true over
+  // false) come first in the list.
+  const itemValueComparator: (a: DimItem, b: DimItem) => number = reverseComparator(
+    chainComparator(
+      // Try hard not to choose exotics - it's weird to replace an exotic with another random exotic.
+      // But we might have to if there's no other option.
+      compareBy((i) => !i.equippingLabel),
+      // try to match type (e.g. scout rifle). TODO: look into using ItemSubType instead
+      compareBy((i) => i.typeName === item.typeName),
+      compareBy((i) => {
+        const tag = getTag(i);
+        return -equipReplacePriority.indexOf(tag || 'none');
+      }),
+      // Prefer higher-tier items
+      compareBy((i) => moveAsideWeighting[i.tier]),
+      // Prefer higher-stat items
+      compareBy((i) => i.primaryStat?.value ?? 0),
+    ),
+  );
+
+  const sortedCandidates = candidates.sort(itemValueComparator);
+
+  return (
+    sortedCandidates.find((result) => {
+      if (result.equippingLabel) {
+        const otherExotic = getOtherExoticThatNeedsDequipping(result, store);
+        // If there aren't other exotics equipped, or the equipped one is the one we're dequipping, we're good
+        return !otherExotic || otherExotic.id === item.id;
+      } else {
+        return true;
       }
-    }
-  };
+    }) || undefined
+  );
 }

@@ -3,16 +3,15 @@ import { DimItem } from 'app/inventory/item-types';
 import { useD2Definitions } from 'app/manifest/selectors';
 import { ObjectiveValue } from 'app/progress/Objective';
 import MetricBanner from 'app/records/MetricBanner';
-import React from 'react';
 import styles from './EmblemPreview.m.scss';
 
 export default function EmblemPreview({ item }: { item: DimItem }) {
   const defs = useD2Definitions()!;
-  const metricDef = item.metricObjective && item.metricHash && defs.Metric.get(item.metricHash);
+  const metricDef =
+    item.metricObjective && item.metricHash !== undefined && defs.Metric.get(item.metricHash);
   const parentPresentationNode =
     metricDef && defs.PresentationNode.get(metricDef.parentNodeHashes[0]);
-  const trait =
-    metricDef && defs.Trait.get(metricDef.traitHashes[metricDef.traitHashes.length - 1]);
+  const trait = metricDef && defs.Trait.get(metricDef.traitHashes.at(-1)!);
 
   const objectiveHash = item.metricObjective?.objectiveHash;
   const objectiveDef = objectiveHash !== undefined && defs.Objective.get(objectiveHash);

@@ -1,21 +1,21 @@
 import { addCompareItem } from 'app/compare/actions';
+import { settingSelector } from 'app/dim-api/selectors';
 import { t } from 'app/i18next-t';
 import { showInfuse } from 'app/infuse/infuse';
+import { canSyncLockState } from 'app/inventory/SyncTagLock';
 import { DimItem } from 'app/inventory/item-types';
 import { consolidate, distribute } from 'app/inventory/move-item';
-import { sortedStoresSelector } from 'app/inventory/selectors';
+import { sortedStoresSelector, tagSelector } from 'app/inventory/selectors';
 import { getStore } from 'app/inventory/stores-helpers';
 import ActionButton from 'app/item-actions/ActionButton';
 import LockButton from 'app/item-actions/LockButton';
+import ItemTagSelector from 'app/item-popup/ItemTagSelector';
 import { hideItemPopup } from 'app/item-popup/item-popup';
 import { ItemActionsModel } from 'app/item-popup/item-popup-actions';
-import ItemTagSelector from 'app/item-popup/ItemTagSelector';
 import { addItemToLoadout } from 'app/loadout-drawer/loadout-events';
-import { addIcon, AppIcon, compareIcon } from 'app/shell/icons';
+import { AppIcon, addIcon, compareIcon } from 'app/shell/icons';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import clsx from 'clsx';
-import { BucketHashes } from 'data/d2/generated-enums';
-import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import arrowsIn from '../../images/arrows-in.png';
 import arrowsOut from '../../images/arrows-out.png';
@@ -40,34 +40,42 @@ export function CompareActionButton({ item, label }: ActionButtonProps) {
   }
 
   return (
-    <ActionButton onClick={openCompare}>
+    <ActionButton onClick={openCompare} hotkey="c" hotkeyDescription={t('Compare.ButtonHelp')}>
       <AppIcon icon={compareIcon} />
       {label && <span className={styles.label}>{t('Compare.Button')}</span>}
     </ActionButton>
   );
 }
 
-export function LockActionButton({ item, label }: ActionButtonProps) {
+export function LockActionButton({
+  item,
+  label,
+  noHotkey,
+}: ActionButtonProps & { noHotkey?: boolean }) {
+  const autoLockTagged = useSelector(settingSelector('autoLockTagged'));
+  const tag = useSelector(tagSelector(item));
+
   if (!item.lockable && !item.trackable) {
     return null;
   }
 
+  const disabled = autoLockTagged && tag !== undefined && canSyncLockState(item);
+
   const type = item.lockable ? 'lock' : 'track';
+  // Let's keep these translations around?
+  // t('MovePopup.FavoriteUnFavorite.Favorited')
+  // t('MovePopup.FavoriteUnFavorite.Unfavorited')
   const title =
     type === 'lock'
       ? item.locked
-        ? item.bucket.hash === BucketHashes.Finishers
-          ? t('MovePopup.FavoriteUnFavorite.Favorited')
-          : t('MovePopup.LockUnlock.Locked')
-        : item.bucket.hash === BucketHashes.Finishers
-        ? t('MovePopup.FavoriteUnFavorite.Unfavorited')
+        ? t('MovePopup.LockUnlock.Locked')
         : t('MovePopup.LockUnlock.Unlocked')
       : item.tracked
-      ? t('MovePopup.TrackUntrack.Tracked')
-      : t('MovePopup.TrackUntrack.Untracked');
+        ? t('MovePopup.TrackUntrack.Tracked')
+        : t('MovePopup.TrackUntrack.Untracked');
 
   return (
-    <LockButton item={item} type={type}>
+    <LockButton item={item} type={type} disabled={disabled} noHotkey={noHotkey}>
       {label && <span className={styles.label}>{title}</span>}
     </LockButton>
   );
@@ -161,7 +169,7 @@ export function InfuseActionButton({
   };
 
   return (
-    <ActionButton onClick={infuse}>
+    <ActionButton onClick={infuse} hotkey="i" hotkeyDescription={t('MovePopup.InfuseTitle')}>
       <img src={d2Infuse} />
       {label && <span className={styles.label}>{t('MovePopup.Infuse')}</span>}
     </ActionButton>
@@ -183,7 +191,7 @@ export function LoadoutActionButton({
   };
 
   return (
-    <ActionButton onClick={addToLoadout}>
+    <ActionButton onClick={addToLoadout} title={t('MovePopup.AddToLoadoutTitle')}>
       <AppIcon icon={addIcon} />
       {label && <span className={styles.label}>{t('MovePopup.AddToLoadout')}</span>}
     </ActionButton>

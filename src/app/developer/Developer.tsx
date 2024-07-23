@@ -1,4 +1,5 @@
 import { registerApp } from 'app/dim-api/register-app';
+import { errorMessage } from 'app/utils/errors';
 import React, { useState } from 'react';
 
 const createAppUrl = 'https://www.bungie.net/en/Application/Create';
@@ -8,7 +9,7 @@ export default function Developer(this: never) {
 
   // Load parameters from either local storage or the URL
   function useDevParam(param: string) {
-    return useState(() => localStorage.getItem(param) || urlParams.get(param) || undefined);
+    return useState(() => localStorage.getItem(param) || urlParams.get(param) || '');
   }
 
   const [apiKey, setApiKey] = useDevParam('apiKey');
@@ -39,13 +40,14 @@ export default function Developer(this: never) {
       localStorage.removeItem('authorization');
       window.location.href = window.location.origin;
     } else {
+      // eslint-disable-next-line no-alert
       alert('You need to fill in the whole form');
     }
   };
 
   const onChange =
     (
-      setter: React.Dispatch<React.SetStateAction<string | undefined>>
+      setter: React.Dispatch<React.SetStateAction<string>>,
     ): React.ChangeEventHandler<HTMLInputElement | HTMLSelectElement> =>
     (e) => {
       setter(e.target.value);
@@ -60,7 +62,8 @@ export default function Developer(this: never) {
       const app = await registerApp(dimAppName, apiKey);
       setDimApiKey(app.dimApiKey);
     } catch (e) {
-      alert(e.message);
+      // eslint-disable-next-line no-alert
+      alert(errorMessage(e));
     }
   };
 
@@ -101,6 +104,9 @@ export default function Developer(this: never) {
               into the "Origin Header" section under "Browser Based Apps".
             </li>
             <li>Select "Confidential" OAuth type.</li>
+            <li>
+              Select all scopes <i>except</i> for Administrate Groups/Clans
+            </li>
             <li>
               After saving, copy the "API Key" here:
               <br />
@@ -154,7 +160,7 @@ export default function Developer(this: never) {
                 type="button"
                 className="dim-button"
                 onClick={getDimApiKey}
-                disabled={!apiKey || !dimAppName || !dimAppName.match(/^[a-z0-9-]{3,}$/)}
+                disabled={!apiKey || !dimAppName?.match(/^[a-z0-9-]{3,}$/)}
               >
                 Get API Key
               </button>

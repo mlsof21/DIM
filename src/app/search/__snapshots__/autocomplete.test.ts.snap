@@ -1,81 +1,24 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`autocompleteTermSuggestions autocomplete within query for |(is:blue jun)| with caret at position 11 1`] = `
+exports[`autocompleteTermSuggestions autocomplete within query for plain string match {jotu} - {jötunn} 1`] = `
 [
   {
     "highlightRange": {
       "range": [
-        9,
-        17,
+        0,
+        13,
       ],
       "section": "body",
     },
     "query": {
-      "body": "(is:blue tag:junk)",
-      "fullText": "(is:blue tag:junk)",
+      "body": "name:"jötunn"",
+      "fullText": "name:"jötunn"",
       "helpText": undefined,
     },
     "type": 3,
   },
 ]
 `;
-
-exports[`autocompleteTermSuggestions autocomplete within query for |is:bow is:void| with caret at position 11 1`] = `
-[
-  {
-    "highlightRange": {
-      "range": [
-        7,
-        14,
-      ],
-      "section": "body",
-    },
-    "query": {
-      "body": "is:bow is:void",
-      "fullText": "is:bow is:void",
-      "helpText": undefined,
-    },
-    "type": 3,
-  },
-]
-`;
-
-exports[`autocompleteTermSuggestions autocomplete within query for |is:haspower is:b| with caret at position 16 1`] = `
-[
-  {
-    "highlightRange": {
-      "range": [
-        12,
-        18,
-      ],
-      "section": "body",
-    },
-    "query": {
-      "body": "is:haspower is:bow",
-      "fullText": "is:haspower is:bow",
-      "helpText": undefined,
-    },
-    "type": 3,
-  },
-  {
-    "highlightRange": {
-      "range": [
-        12,
-        19,
-      ],
-      "section": "body",
-    },
-    "query": {
-      "body": "is:haspower is:blue",
-      "fullText": "is:haspower is:blue",
-      "helpText": undefined,
-    },
-    "type": 3,
-  },
-]
-`;
-
-exports[`autocompleteTermSuggestions autocomplete within query for |season:>outl| with caret at position 12 1`] = `[]`;
 
 exports[`filterComplete autocomplete terms for |is:b| 1`] = `
 [
@@ -139,8 +82,13 @@ exports[`filterComplete autocomplete terms for |stat:| 1`] = `
   "stat:intellect:",
   "stat:strength:",
   "stat:total:",
-  "stat:custom:",
   "stat:any:",
+  "stat:highest:",
+  "stat:secondhighest:",
+  "stat:thirdhighest:",
+  "stat:fourthhighest:",
+  "stat:fifthhighest:",
+  "stat:sixthhighest:",
   "stat:rpm:<",
   "stat:rpm:>",
   "stat:rof:<",
@@ -205,10 +153,20 @@ exports[`filterComplete autocomplete terms for |stat:| 1`] = `
   "stat:strength:>",
   "stat:total:<",
   "stat:total:>",
-  "stat:custom:<",
-  "stat:custom:>",
   "stat:any:<",
   "stat:any:>",
+  "stat:highest:<",
+  "stat:highest:>",
+  "stat:secondhighest:<",
+  "stat:secondhighest:>",
+  "stat:thirdhighest:<",
+  "stat:thirdhighest:>",
+  "stat:fourthhighest:<",
+  "stat:fourthhighest:>",
+  "stat:fifthhighest:<",
+  "stat:fifthhighest:>",
+  "stat:sixthhighest:<",
+  "stat:sixthhighest:>",
   "stat:rpm:<=",
   "stat:rpm:>=",
   "stat:rof:<=",
@@ -273,10 +231,20 @@ exports[`filterComplete autocomplete terms for |stat:| 1`] = `
   "stat:strength:>=",
   "stat:total:<=",
   "stat:total:>=",
-  "stat:custom:<=",
-  "stat:custom:>=",
   "stat:any:<=",
   "stat:any:>=",
+  "stat:highest:<=",
+  "stat:highest:>=",
+  "stat:secondhighest:<=",
+  "stat:secondhighest:>=",
+  "stat:thirdhighest:<=",
+  "stat:thirdhighest:>=",
+  "stat:fourthhighest:<=",
+  "stat:fourthhighest:>=",
+  "stat:fifthhighest:<=",
+  "stat:fifthhighest:>=",
+  "stat:sixthhighest:<=",
+  "stat:sixthhighest:>=",
 ]
 `;
 
@@ -301,8 +269,6 @@ exports[`filterComplete autocomplete terms for |stat| 1`] = `
   "maxstatloadout:intellect",
   "maxstatloadout:strength",
   "maxstatloadout:total",
-  "maxstatloadout:custom",
-  "maxstatloadout:any",
   "maxstatvalue:mobility",
   "maxstatvalue:resilience",
   "maxstatvalue:recovery",
@@ -310,7 +276,6 @@ exports[`filterComplete autocomplete terms for |stat| 1`] = `
   "maxstatvalue:intellect",
   "maxstatvalue:strength",
   "maxstatvalue:total",
-  "maxstatvalue:custom",
   "maxstatvalue:any",
   "maxbasestatvalue:mobility",
   "maxbasestatvalue:resilience",
@@ -319,7 +284,6 @@ exports[`filterComplete autocomplete terms for |stat| 1`] = `
   "maxbasestatvalue:intellect",
   "maxbasestatvalue:strength",
   "maxbasestatvalue:total",
-  "maxbasestatvalue:custom",
   "maxbasestatvalue:any",
   "is:customstatlower",
   "stat:rpm:",
@@ -354,8 +318,13 @@ exports[`filterComplete autocomplete terms for |stat| 1`] = `
   "stat:intellect:",
   "stat:strength:",
   "stat:total:",
-  "stat:custom:",
   "stat:any:",
+  "stat:highest:",
+  "stat:secondhighest:",
+  "stat:thirdhighest:",
+  "stat:fourthhighest:",
+  "stat:fifthhighest:",
+  "stat:sixthhighest:",
   "basestat:mobility:",
   "basestat:resilience:",
   "basestat:recovery:",
@@ -363,8 +332,13 @@ exports[`filterComplete autocomplete terms for |stat| 1`] = `
   "basestat:intellect:",
   "basestat:strength:",
   "basestat:total:",
-  "basestat:custom:",
   "basestat:any:",
+  "basestat:highest:",
+  "basestat:secondhighest:",
+  "basestat:thirdhighest:",
+  "basestat:fourthhighest:",
+  "basestat:fifthhighest:",
+  "basestat:sixthhighest:",
 ]
 `;
 

@@ -1,7 +1,6 @@
 @use '../variables.scss' as *;
 
 .searchResults {
-  z-index: 10 !important;
   max-height: calc(var(--viewport-height) - var(--header-height) - 16px);
 }
 
@@ -11,4 +10,5 @@
 
 .contents {
   min-height: calc(#{$badge-height} + var(--item-size) + 4px) !important;
+  margin: 10px;
 }

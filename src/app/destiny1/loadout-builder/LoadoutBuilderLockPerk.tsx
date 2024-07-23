@@ -17,9 +17,9 @@ interface Props {
   lockedPerks: { [armorType in ArmorTypes]: LockedPerkHash };
   activePerks: PerkCombination;
   i18nItemNames: { [key: string]: string };
-  onRemove({ type }: { type: string }): void;
-  onPerkLocked(perk: D1GridNode, type: ArmorTypes, $event: React.MouseEvent): void;
-  onItemLocked(item: DimItem): void;
+  onRemove: ({ type }: { type: ArmorTypes }) => void;
+  onPerkLocked: (perk: D1GridNode, type: ArmorTypes, $event: React.MouseEvent) => void;
+  onItemLocked: (item: DimItem) => void;
 }
 
 const typeToHash: { [key in ArmorTypes]: BucketHashes | D1BucketHashes } = {
@@ -52,7 +52,7 @@ export default function LoadoutBuilderLockPerk({
     onPerkLocked(perk, type, $event);
   };
 
-  const firstPerk = lockedPerks[type][Object.keys(lockedPerks[type])[0]];
+  const firstPerk = lockedPerks[type][parseInt(Object.keys(lockedPerks[type])[0], 10)];
   const hasLockedPerks = Object.keys(lockedPerks[type]).length > 0;
 
   return (

@@ -1,7 +1,7 @@
 import ClassIcon from 'app/dim-ui/ClassIcon';
 import ClosableContainer from 'app/dim-ui/ClosableContainer';
 import ConnectedInventoryItem from 'app/inventory/ConnectedInventoryItem';
-import { ResolvedLoadoutItem } from 'app/loadout-drawer/loadout-types';
+import { ResolvedLoadoutItem } from 'app/loadout/loadout-types';
 import { BucketHashes } from 'data/d2/generated-enums';
 import React from 'react';
 
@@ -11,8 +11,8 @@ export default function LoadoutDrawerItem({
   remove,
 }: {
   resolvedLoadoutItem: ResolvedLoadoutItem;
-  equip(resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent): void;
-  remove(resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent): void;
+  equip: (resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent) => void;
+  remove: (resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent) => void;
 }) {
   const onClose = (e: React.MouseEvent) => {
     e.stopPropagation();

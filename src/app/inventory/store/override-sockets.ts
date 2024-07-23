@@ -1,10 +1,11 @@
-import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
+import { UNSET_PLUG_HASH } from 'app/loadout/known-values';
 import { DEFAULT_ORNAMENTS } from 'app/search/d2-known-values';
 import { errorLog } from 'app/utils/log';
-import produce from 'immer';
+import { produce } from 'immer';
 import _ from 'lodash';
 import { useCallback, useState } from 'react';
 import { DimItem, DimPlug, DimSocket } from '../item-types';
+import { ItemCreationContext } from './d2-item-factory';
 import { buildDefinedPlug } from './sockets';
 import { buildStats } from './stats';
 
@@ -12,17 +13,18 @@ import { buildStats } from './stats';
  * Socket overrides are a map from socket index to plug item hash. The plug item hash
  * should be one of the socket's plugOptions (or at least a valid plug for that socket).
  */
-export type SocketOverrides = {
+export interface SocketOverrides {
   [socketIndex: number]: number;
-};
+}
 
 /**
  * Transform an item into a new item whose properties (mostly stats) reflect the chosen socket overrides.
  */
 export function applySocketOverrides(
-  defs: D2ManifestDefinitions,
+  // We don't need everything here but I'm assuming over time we'll want to plumb more stuff into stats calculations?
+  { defs, customStats }: ItemCreationContext,
   item: DimItem,
-  socketOverrides?: SocketOverrides
+  socketOverrides: SocketOverrides | undefined,
 ): DimItem {
   if (!socketOverrides || _.isEmpty(socketOverrides) || !item.sockets) {
     return item;
@@ -40,7 +42,7 @@ export function applySocketOverrides(
     // overwrite them.
     let plugOptions: DimPlug[] = s.plugOptions.map((p) => ({ ...p, stats: null }));
 
-    if (override && s.plugged?.plugDef.hash !== override) {
+    if (override && override !== UNSET_PLUG_HASH && s.plugged?.plugDef.hash !== override) {
       let newPlug, actuallyPlugged;
 
       if (s.isPerk) {
@@ -78,7 +80,7 @@ export function applySocketOverrides(
           'applySocketOverrides',
           "Tried to override to a socket that didn't exist in the options",
           override,
-          s.plugOptions
+          s.plugOptions,
         );
       }
     }
@@ -103,7 +105,7 @@ export function applySocketOverrides(
   };
 
   // Recalculate the entire item's stats from scratch given the new plugs
-  updatedItem.stats = buildStats(defs, updatedItem);
+  updatedItem.stats = buildStats(defs, updatedItem, customStats);
 
   return updatedItem;
 }
@@ -114,7 +116,7 @@ export function applySocketOverrides(
 export function useSocketOverrides(): [
   socketOverrides: SocketOverrides,
   onPlugClicked: (value: { item: DimItem; socket: DimSocket; plugHash: number }) => void,
-  resetOverrides: () => void
+  resetOverrides: () => void,
 ] {
   const [socketOverrides, setSocketOverrides] = useState<SocketOverrides>({});
   const onPlugClicked = useCallback(
@@ -126,26 +128,27 @@ export function useSocketOverrides(): [
           } else {
             so[socket.socketIndex] = plugHash;
           }
-        })
+        }),
       );
     },
-    []
+    [],
   );
   const resetOverrides = useCallback(() => setSocketOverrides({}), []);
   return [socketOverrides, onPlugClicked, resetOverrides];
 }
 
-export type SocketOverridesForItems = { [itemId: string]: SocketOverrides };
+export interface SocketOverridesForItems {
+  [itemId: string]: SocketOverrides;
+}
 
 /**
  * A hook to manage socket overrides for multiple items.
  */
 export function useSocketOverridesForItems(
-  initialOverrides: SocketOverridesForItems = {}
+  initialOverrides: SocketOverridesForItems = {},
 ): [
   socketOverrides: SocketOverridesForItems,
   onPlugClicked: (value: { item: DimItem; socket: DimSocket; plugHash: number }) => void,
-  resetSocketOverrides: () => void
 ] {
   const [socketOverrides, setSocketOverrides] = useState<SocketOverridesForItems>(initialOverrides);
   const onPlugClicked = useCallback(
@@ -168,13 +171,11 @@ export function useSocketOverridesForItems(
           if (_.isEmpty(so[item.id])) {
             delete so[item.id];
           }
-        })
+        }),
       );
     },
-    []
+    [],
   );
 
-  const resetSocketOverrides = useCallback(() => setSocketOverrides({}), []);
-
-  return [socketOverrides, onPlugClicked, resetSocketOverrides];
+  return [socketOverrides, onPlugClicked];
 }

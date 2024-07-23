@@ -2,37 +2,60 @@ import { LoadoutSort } from '@destinyitemmanager/dim-api-types';
 import { DestinyAccount } from 'app/accounts/destiny-account';
 import { apiPermissionGrantedSelector, languageSelector } from 'app/dim-api/selectors';
 import { AlertIcon } from 'app/dim-ui/AlertIcon';
+import BungieImage from 'app/dim-ui/BungieImage';
 import CharacterSelect from 'app/dim-ui/CharacterSelect';
-import { ConfirmButton } from 'app/dim-ui/ConfirmButton';
 import PageWithMenu from 'app/dim-ui/PageWithMenu';
 import ShowPageLoading from 'app/dim-ui/ShowPageLoading';
-import { t } from 'app/i18next-t';
-import { sortedStoresSelector } from 'app/inventory/selectors';
-import { DimStore } from 'app/inventory/store-types';
+import { VirtualListRef, WindowVirtualList } from 'app/dim-ui/VirtualList';
+import ColorDestinySymbols from 'app/dim-ui/destiny-symbols/ColorDestinySymbols';
+import { t, tl } from 'app/i18next-t';
+import { artifactUnlocksSelector, storesSelector } from 'app/inventory/selectors';
 import { useLoadStores } from 'app/inventory/store/hooks';
-import { getCurrentStore, getStore } from 'app/inventory/stores-helpers';
-import { deleteLoadout } from 'app/loadout-drawer/actions';
-import { applyLoadout } from 'app/loadout-drawer/loadout-apply';
+import {
+  MakeLoadoutAnalysisAvailable,
+  useUpdateLoadoutAnalysisContext,
+} from 'app/loadout-analyzer/hooks';
 import { editLoadout } from 'app/loadout-drawer/loadout-events';
-import { Loadout } from 'app/loadout-drawer/loadout-types';
-import { newLoadout, newLoadoutFromEquipped } from 'app/loadout-drawer/loadout-utils';
-import { loadoutsSelector } from 'app/loadout-drawer/selectors';
-import { plainString } from 'app/search/search-filters/freeform';
+import {
+  getLoadoutSeason,
+  newLoadout,
+  newLoadoutFromEquipped,
+} from 'app/loadout-drawer/loadout-utils';
+import { InGameLoadout, Loadout } from 'app/loadout/loadout-types';
+import { loadoutsForClassTypeSelector } from 'app/loadout/loadouts-selector';
+import { selectedLoadoutStoreSelector } from 'app/loadout/selectors';
+import { useD2Definitions } from 'app/manifest/selectors';
+import { loadoutFilterFactorySelector } from 'app/search/loadouts/loadout-search-filter';
 import { useSetting } from 'app/settings/hooks';
-import { addIcon, AppIcon, deleteIcon, faCalculator, faCheckCircle } from 'app/shell/icons';
+import { AppIcon, addIcon, faCalculator, uploadIcon } from 'app/shell/icons';
 import { querySelector, useIsPhonePortrait } from 'app/shell/selectors';
-import { useThunkDispatch } from 'app/store/thunk-dispatch';
-import { streamDeckSelectionSelector } from 'app/stream-deck/selectors';
-import { streamDeckSelectLoadout } from 'app/stream-deck/stream-deck';
-import { Portal } from 'app/utils/temp-container';
-import { DestinyClass } from 'bungie-api-ts/destiny2';
-import _ from 'lodash';
-import { ReactNode, useMemo, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { usePageTitle } from 'app/utils/hooks';
+import { DestinySeasonDefinition } from 'bungie-api-ts/destiny2';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
 import { Link } from 'react-router-dom';
-import LoadoutShareSheet from './loadout-share/LoadoutShareSheet';
 import styles from './Loadouts.m.scss';
-import LoadoutView from './LoadoutView';
+import LoadoutRow from './LoadoutsRow';
+import { updateLoadoutStore } from './actions';
+import EditInGameLoadout from './ingame/EditInGameLoadout';
+import { InGameLoadoutDetails } from './ingame/InGameLoadoutDetailsSheet';
+import { InGameLoadoutStrip } from './ingame/InGameLoadoutStrip';
+import LoadoutImportSheet from './loadout-share/LoadoutImportSheet';
+import LoadoutShareSheet from './loadout-share/LoadoutShareSheet';
+import { searchAndSortLoadoutsByQuery, useLoadoutFilterPills } from './loadout-ui/menu-hooks';
+
+const sortOptions = [
+  {
+    key: 'time',
+    content: tl('Loadouts.SortByEditTime'),
+    value: LoadoutSort.ByEditTime,
+  },
+  {
+    key: 'name',
+    content: tl('Loadouts.SortByName'),
+    value: LoadoutSort.ByName,
+  },
+];
 
 /**
  * The Loadouts page is a toplevel page for loadout management. It also provides access to the Loadout Optimizer.
@@ -41,74 +64,114 @@ import LoadoutView from './LoadoutView';
  */
 export default function LoadoutsContainer({ account }: { account: DestinyAccount }) {
   const storesLoaded = useLoadStores(account);
+  usePageTitle(t('Loadouts.Loadouts'));
 
   if (!storesLoaded) {
     return <ShowPageLoading message={t('Loading.Profile')} />;
   }
 
-  return <Loadouts account={account} />;
+  // TODO: how high in our tree do we want this analyzer?
+  return (
+    <MakeLoadoutAnalysisAvailable>
+      <Loadouts account={account} />
+    </MakeLoadoutAnalysisAvailable>
+  );
 }
 
 function Loadouts({ account }: { account: DestinyAccount }) {
-  const stores = useSelector(sortedStoresSelector);
-  const currentStore = getCurrentStore(stores)!;
-  const [selectedStoreId, setSelectedStoreId] = useState(currentStore.id);
+  const dispatch = useDispatch();
+
+  const stores = useSelector(storesSelector);
+  const selectedStore = useSelector(selectedLoadoutStoreSelector);
+
+  const setSelectedStoreId = useCallback(
+    (storeId: string) => {
+      dispatch(updateLoadoutStore({ storeId }));
+    },
+    [dispatch],
+  );
+
+  useEffect(
+    () => () => {
+      // Unset selected loadout on unmount so that the selection is not
+      // remembered across page navigations.
+      dispatch(updateLoadoutStore({ storeId: undefined }));
+    },
+    [dispatch],
+  );
+
   const [sharedLoadout, setSharedLoadout] = useState<Loadout>();
-  const selectedStore = getStore(stores, selectedStoreId)!;
+  const [loadoutImportOpen, setLoadoutImportOpen] = useState<boolean>(false);
   const classType = selectedStore.classType;
-  const allLoadouts = useSelector(loadoutsSelector);
-  const [loadoutSort, setLoadoutSort] = useSetting('loadoutSort');
   const isPhonePortrait = useIsPhonePortrait();
   const query = useSelector(querySelector);
+  const [loadoutSort, setLoadoutSort] = useSetting('loadoutSort');
   const language = useSelector(languageSelector);
   const apiPermissionGranted = useSelector(apiPermissionGrantedSelector);
 
-  const savedLoadouts = useMemo(
-    () =>
-      _.sortBy(
-        allLoadouts.filter(
-          (loadout) =>
-            classType === DestinyClass.Unknown ||
-            loadout.classType === DestinyClass.Unknown ||
-            loadout.classType === classType
-        ),
-        loadoutSort === LoadoutSort.ByEditTime ? (l) => -(l.lastUpdatedAt ?? 0) : (l) => l.name
-      ),
-    [allLoadouts, classType, loadoutSort]
-  );
+  const savedLoadouts = useSelector(loadoutsForClassTypeSelector(classType));
+  const savedLoadoutIds = new Set(savedLoadouts.map((l) => l.id));
+
+  const artifactUnlocks = useSelector(artifactUnlocksSelector(selectedStore.id));
 
   const currentLoadout = useMemo(
-    () => newLoadoutFromEquipped(t('Loadouts.FromEquipped'), selectedStore),
-    [selectedStore]
+    () => newLoadoutFromEquipped(t('Loadouts.FromEquipped'), selectedStore, artifactUnlocks),
+    [artifactUnlocks, selectedStore],
   );
 
-  const loadoutQueryPlain = plainString(query, language);
-  const loadouts = [currentLoadout, ...savedLoadouts].filter(
-    (loadout) =>
-      !query ||
-      plainString(loadout.name, language).includes(loadoutQueryPlain) ||
-      (loadout.notes && plainString(loadout.notes, language).includes(loadoutQueryPlain))
+  useUpdateLoadoutAnalysisContext(selectedStore.id);
+
+  const [showSnapshot, setShowSnapshot] = useState(false);
+  const handleSnapshot = useCallback(() => setShowSnapshot(true), []);
+  const handleSnapshotSheetClose = useCallback(() => setShowSnapshot(false), []);
+
+  const [editingInGameLoadout, setEditingInGameLoadout] = useState<InGameLoadout>();
+  const handleEditSheetClose = useCallback(() => setEditingInGameLoadout(undefined), []);
+
+  const [viewingInGameLoadout, setViewingInGameLoadout] = useState<InGameLoadout>();
+  const handleViewingSheetClose = useCallback(() => setViewingInGameLoadout(undefined), []);
+
+  const [filteredLoadouts, filterPills, hasSelectedFilters] = useLoadoutFilterPills(
+    savedLoadouts,
+    selectedStore,
+    {
+      includeWarningPills: true,
+      extra: <span className={styles.hashtagTip}>{t('Loadouts.HashtagTip')}</span>,
+    },
   );
 
-  const savedLoadoutIds = new Set(savedLoadouts.map((l) => l.id));
+  const filteringLoadouts = Boolean(query || hasSelectedFilters);
+
+  const loadoutFilterFactory = useSelector(loadoutFilterFactorySelector);
+  const loadouts = searchAndSortLoadoutsByQuery(
+    filteredLoadouts,
+    loadoutFilterFactory,
+    query,
+    language,
+    loadoutSort,
+  );
+  if (!filteringLoadouts) {
+    loadouts.unshift(currentLoadout);
+  }
 
   const handleNewLoadout = () => {
     const loadout = newLoadout('', [], selectedStore.classType);
     editLoadout(loadout, selectedStore.id, { isNew: true });
   };
 
-  const sortOptions = [
-    {
-      key: 'time',
-      content: t('Loadouts.SortByEditTime'),
-      value: LoadoutSort.ByEditTime,
+  // Insert season headers if we're sorting by edit time
+  const loadoutRows = useAddSeasonHeaders(loadouts, loadoutSort);
+
+  const virtualListRef = useRef<VirtualListRef>(null);
+  const scrollToLoadout = useCallback(
+    (id: string) => {
+      const index = loadouts.findIndex((l) => l.id === id);
+      if (index >= 0) {
+        virtualListRef.current?.scrollToIndex(index, { align: 'start' });
+      }
     },
-    {
-      key: 'name',
-      content: t('Loadouts.SortByName'),
-      value: LoadoutSort.ByName,
-    },
-  ];
+    [loadouts],
+  );
 
   return (
     <PageWithMenu>
@@ -125,139 +188,144 @@ function Loadouts({ account }: { account: DestinyAccount }) {
           >
             {sortOptions.map((option) => (
               <option key={option.key} value={option.value}>
-                {option.content}
+                {t(option.content)}
               </option>
             ))}
           </select>
           <button type="button" className={styles.menuButton} onClick={handleNewLoadout}>
             <AppIcon icon={addIcon} /> <span>{t('Loadouts.Create')}</span>
           </button>
-          <Link className={styles.menuButton} to={`../optimizer?class=${selectedStore.classType}`}>
+          <button
+            type="button"
+            className={styles.menuButton}
+            onClick={() => setLoadoutImportOpen(true)}
+          >
+            <AppIcon icon={uploadIcon} /> <span>{t('Loadouts.ImportLoadout')}</span>
+          </button>
+          <Link
+            className={styles.menuButton}
+            to="../optimizer"
+            state={{ storeId: selectedStore.id }}
+          >
             <AppIcon icon={faCalculator} /> {t('LB.LB')}
           </Link>
         </div>
         {!isPhonePortrait &&
           loadouts.map((loadout) => (
-            <PageWithMenu.MenuButton anchor={loadout.id} key={loadout.id}>
-              <span>{loadout.name}</span>
+            <PageWithMenu.MenuButton onClick={() => scrollToLoadout(loadout.id)} key={loadout.id}>
+              <ColorDestinySymbols text={loadout.name} />
             </PageWithMenu.MenuButton>
           ))}
       </PageWithMenu.Menu>
-
-      <PageWithMenu.Contents className={styles.page}>
+      <PageWithMenu.Contents>
         {$featureFlags.warnNoSync && !apiPermissionGranted && (
           <p>
             <AlertIcon /> {t('Storage.DimSyncNotEnabled')}
           </p>
         )}
-        {loadouts.map((loadout) => (
-          <LoadoutRow
-            key={loadout.id}
-            loadout={loadout}
+        {!filteringLoadouts && (
+          <InGameLoadoutStrip
             store={selectedStore}
-            saved={savedLoadoutIds.has(loadout.id)}
-            equippable={loadout !== currentLoadout}
+            onEdit={setEditingInGameLoadout}
             onShare={setSharedLoadout}
+            onShowDetails={setViewingInGameLoadout}
           />
-        ))}
+        )}
+        <h2>{t('Loadouts.DimLoadouts')}</h2>
+        {filterPills}
+        <WindowVirtualList
+          ref={virtualListRef}
+          numElements={loadoutRows.length}
+          itemContainerClassName={styles.loadoutRow}
+          estimatedSize={270}
+          getItemKey={(index) => {
+            const loadoutOrSeason = loadoutRows[index];
+            return 'id' in loadoutOrSeason ? loadoutOrSeason.id : loadoutOrSeason.startDate!;
+          }}
+        >
+          {(index) => {
+            const loadoutOrSeason = loadoutRows[index];
+            if ('id' in loadoutOrSeason) {
+              const loadout = loadoutOrSeason;
+              return (
+                <LoadoutRow
+                  loadout={loadout}
+                  store={selectedStore}
+                  saved={savedLoadoutIds.has(loadout.id)}
+                  equippable={loadout !== currentLoadout}
+                  onShare={setSharedLoadout}
+                  onSnapshotInGameLoadout={handleSnapshot}
+                />
+              );
+            } else {
+              const season = loadoutOrSeason;
+              return (
+                <h3 className={styles.seasonHeader}>
+                  {season.displayProperties.hasIcon && (
+                    <BungieImage height={24} width={24} src={season.displayProperties.icon} />
+                  )}{' '}
+                  {season.displayProperties.name} -{' '}
+                  {t('Loadouts.Season', {
+                    season: season.seasonNumber,
+                  })}
+                </h3>
+              );
+            }
+          }}
+        </WindowVirtualList>
         {loadouts.length === 0 && <p>{t('Loadouts.NoneMatch', { query })}</p>}
       </PageWithMenu.Contents>
       {sharedLoadout && (
-        <Portal>
-          <LoadoutShareSheet
-            account={account}
-            loadout={sharedLoadout}
-            onClose={() => setSharedLoadout(undefined)}
-          />
-        </Portal>
+        <LoadoutShareSheet
+          account={account}
+          loadout={sharedLoadout}
+          onClose={() => setSharedLoadout(undefined)}
+        />
+      )}
+      {loadoutImportOpen && (
+        <LoadoutImportSheet
+          currentStoreId={selectedStore.id}
+          onClose={() => setLoadoutImportOpen(false)}
+        />
+      )}
+      {viewingInGameLoadout && (
+        <InGameLoadoutDetails
+          store={selectedStore}
+          loadout={viewingInGameLoadout}
+          onEdit={setEditingInGameLoadout}
+          onShare={setSharedLoadout}
+          onClose={handleViewingSheetClose}
+        />
+      )}
+      {showSnapshot && (
+        <EditInGameLoadout
+          key="snapshot"
+          characterId={selectedStore.id}
+          onClose={handleSnapshotSheetClose}
+        />
+      )}
+      {editingInGameLoadout && (
+        <EditInGameLoadout
+          key="editsheet"
+          loadout={editingInGameLoadout}
+          onClose={handleEditSheetClose}
+        />
       )}
     </PageWithMenu>
   );
 }
 
-function LoadoutRow({
-  loadout,
-  store,
-  saved,
-  equippable,
-  onShare,
-}: {
-  loadout: Loadout;
-  store: DimStore;
-  saved: boolean;
-  equippable: boolean;
-  onShare: (loadout: Loadout) => void;
-}) {
-  const dispatch = useThunkDispatch();
+function useAddSeasonHeaders(loadouts: Loadout[], loadoutSort: LoadoutSort) {
+  const defs = useD2Definitions()!;
+  let loadoutRows: (Loadout | DestinySeasonDefinition)[] = loadouts;
+  if (loadoutSort === LoadoutSort.ByEditTime) {
+    const seasons = Object.values(defs.Season.getAll())
+      .sort((a, b) => b.seasonNumber - a.seasonNumber)
+      .filter((s) => s.startDate);
 
-  const streamDeckSelection = $featureFlags.elgatoStreamDeck
-    ? // eslint-disable-next-line
-      useSelector(streamDeckSelectionSelector)
-    : null;
+    const grouped = Map.groupBy(loadouts, (loadout) => getLoadoutSeason(loadout, seasons)!);
 
-  const actionButtons = useMemo(() => {
-    const handleDeleteClick = (loadout: Loadout) => dispatch(deleteLoadout(loadout.id));
-
-    const handleApply = () =>
-      dispatch(applyLoadout(store, loadout, { allowUndo: true, onlyMatchingClass: true }));
-
-    const handleEdit = () => editLoadout(loadout, store.id, { isNew: !saved });
-    const actionButtons: ReactNode[] = [];
-
-    if (equippable) {
-      if (streamDeckSelection === 'loadout') {
-        const handleSelection = () => dispatch(streamDeckSelectLoadout(loadout, store));
-        return [
-          <button
-            key="select-for-stream-deck"
-            type="button"
-            className="dim-button"
-            onClick={handleSelection}
-          >
-            <span className={styles.iconLabel}>{t('StreamDeck.SelectLoadout')}</span>
-            <AppIcon icon={faCheckCircle} title={t('StreamDeck.SelectLoadout')} />
-          </button>,
-        ];
-      }
-
-      actionButtons.push(
-        <button key="apply" type="button" className="dim-button" onClick={handleApply}>
-          {t('Loadouts.Apply')}
-        </button>
-      );
-    }
-
-    actionButtons.push(
-      <button key="edit" type="button" className="dim-button" onClick={handleEdit}>
-        {saved ? t('Loadouts.EditBrief') : t('Loadouts.SaveLoadout')}
-      </button>
-    );
-
-    if (loadout.parameters && !_.isEmpty(loadout.parameters)) {
-      actionButtons.push(
-        <button key="share" type="button" className="dim-button" onClick={() => onShare(loadout)}>
-          {t('Loadouts.ShareLoadout')}
-        </button>
-      );
-    }
-
-    if (saved) {
-      actionButtons.push(
-        <ConfirmButton key="delete" danger onClick={() => handleDeleteClick(loadout)}>
-          <AppIcon icon={deleteIcon} title={t('Loadouts.Delete')} />
-        </ConfirmButton>
-      );
-    }
-
-    return actionButtons;
-  }, [dispatch, equippable, loadout, onShare, saved, store, streamDeckSelection]);
-
-  return (
-    <LoadoutView
-      loadout={loadout}
-      store={store}
-      actionButtons={actionButtons}
-      hideShowModPlacements={!equippable}
-    />
-  );
+    loadoutRows = [...grouped.entries()].flatMap(([season, loadouts]) => [season, ...loadouts]);
+  }
+  return loadoutRows;
 }

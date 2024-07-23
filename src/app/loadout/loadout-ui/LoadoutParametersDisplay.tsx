@@ -1,10 +1,12 @@
-import { LoadoutParameters } from '@destinyitemmanager/dim-api-types';
+import { LoadoutParameters, StatConstraint } from '@destinyitemmanager/dim-api-types';
 import BungieImage from 'app/dim-ui/BungieImage';
+import { PressTip } from 'app/dim-ui/PressTip';
 import { t } from 'app/i18next-t';
-import ExoticArmorChoice from 'app/loadout-builder/filter/ExoticArmorChoice';
+import ExoticArmorChoice, { getLockedExotic } from 'app/loadout-builder/filter/ExoticArmorChoice';
 import { useD2Definitions } from 'app/manifest/selectors';
-import { AppIcon, searchIcon } from 'app/shell/icons';
-import React from 'react';
+import { AppIcon, equalsIcon, greaterThanIcon, lessThanIcon, searchIcon } from 'app/shell/icons';
+import clsx from 'clsx';
+import { includesRuntimeStatMods } from '../stats';
 import styles from './LoadoutParametersDisplay.m.scss';
 
 export function hasVisibleLoadoutParameters(params: LoadoutParameters | undefined) {
@@ -12,7 +14,10 @@ export function hasVisibleLoadoutParameters(params: LoadoutParameters | undefine
     params &&
     (params.query ||
       params.exoticArmorHash ||
-      params.statConstraints?.some((s) => s.maxTier !== undefined || s.minTier !== undefined))
+      params.statConstraints?.some((s) => s.maxTier !== undefined || s.minTier !== undefined) ||
+      (params.mods &&
+        includesRuntimeStatMods(params.mods) &&
+        (params.includeRuntimeStatBenefits ?? true)))
   );
 }
 
@@ -23,47 +28,112 @@ export default function LoadoutParametersDisplay({ params }: { params: LoadoutPa
   if (!show) {
     return null;
   }
+  const lbParamDesc = (str: string) => `${t('Loadouts.LoadoutParameters')} – ${str}`;
 
   return (
     <div className={styles.loParams}>
       {query && (
-        <div className={styles.loQuery}>
+        <PressTip
+          className={styles.loQuery}
+          tooltip={() => lbParamDesc(t('Loadouts.LoadoutParametersQuery'))}
+        >
           <AppIcon icon={searchIcon} />
           {query}
-        </div>
+        </PressTip>
       )}
-      {exoticArmorHash && (
-        <div className={styles.loExotic}>
+      {exoticArmorHash !== undefined && (
+        <PressTip
+          className={styles.loExotic}
+          tooltip={() => {
+            const [, exoticName] = getLockedExotic(defs, exoticArmorHash);
+            return lbParamDesc(t('Loadouts.LoadoutParametersExotic', { exoticName: exoticName! }));
+          }}
+        >
           <ExoticArmorChoice lockedExoticHash={exoticArmorHash} />
-        </div>
+        </PressTip>
       )}
+      {params.mods &&
+        includesRuntimeStatMods(params.mods) &&
+        (params.includeRuntimeStatBenefits ?? true) && (
+          <PressTip tooltip={t('Loadouts.IncludeRuntimeStatBenefitsDesc')}>
+            {t('Loadouts.IncludeRuntimeStatBenefits')}
+          </PressTip>
+        )}
       {statConstraints && (
-        <div className={styles.loStats}>
+        <PressTip
+          className={styles.loStats}
+          tooltip={() => lbParamDesc(t('Loadouts.LoadoutParametersStats'))}
+        >
           {statConstraints.map((s) => (
             <div key={s.statHash} className={styles.loStat}>
               <BungieImage src={defs.Stat.get(s.statHash).displayProperties.icon} />
-              {s.minTier !== undefined && s.minTier !== 0 ? (
-                <span>
-                  {t('LoadoutBuilder.TierNumber', {
-                    tier: s.minTier,
-                  })}
-                  {(s.maxTier === 10 || s.maxTier === undefined) && s.minTier !== 10
-                    ? '+'
-                    : s.maxTier !== undefined && s.maxTier !== s.minTier
-                    ? `-${s.maxTier}`
-                    : ''}
-                </span>
-              ) : s.maxTier !== undefined ? (
-                <span>T{s.maxTier}-</span>
-              ) : (
-                t('LoadoutBuilder.TierNumber', {
-                  tier: 10,
-                }) + '-'
-              )}
+              <StatConstraintRange statConstraint={s} />
             </div>
           ))}
-        </div>
+        </PressTip>
       )}
     </div>
   );
+}
+
+export function StatConstraintRange({
+  statConstraint,
+  className,
+}: {
+  statConstraint: StatConstraint;
+  className?: string;
+}) {
+  className = clsx(className, styles.constraintRange);
+
+  return (
+    <span className={className}>
+      <StatConstraintRangeExpression statConstraint={statConstraint} />
+    </span>
+  );
+}
+
+function StatConstraintRangeExpression({ statConstraint }: { statConstraint: StatConstraint }) {
+  const min = statConstraint.minTier ?? 0;
+  const max = statConstraint.maxTier ?? 10;
+
+  if (min === max) {
+    // =Tmin
+    return (
+      <>
+        <AppIcon icon={equalsIcon} />
+        {t('LoadoutBuilder.TierNumber', {
+          tier: min,
+        })}
+      </>
+    );
+  } else if (max === 10) {
+    // >= Tmin
+    return (
+      <>
+        <AppIcon icon={greaterThanIcon} />
+        {t('LoadoutBuilder.TierNumber', {
+          tier: min,
+        })}
+      </>
+    );
+  } else if (min === 0) {
+    // <= Tmax
+    return (
+      <>
+        <AppIcon icon={lessThanIcon} />
+        {t('LoadoutBuilder.TierNumber', {
+          tier: max,
+        })}
+      </>
+    );
+  } else {
+    // Tmin-Tmax
+    return (
+      <>
+        {`${t('LoadoutBuilder.TierNumber', {
+          tier: min,
+        })}-${max}`}
+      </>
+    );
+  }
 }

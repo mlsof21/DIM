@@ -2,11 +2,16 @@
 // Please do not change this file!
 interface CssExports {
   'actions': string;
+  'artifactMods': string;
   'classIcon': string;
   'contents': string;
+  'disableEvents': string;
+  'fadeIn': string;
+  'finding': string;
+  'findings': string;
   'loadout': string;
   'loadoutNotes': string;
-  'missingItems': string;
+  'modsStack': string;
   'title': string;
 }
 export const cssExports: CssExports;

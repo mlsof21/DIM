@@ -6,7 +6,6 @@ import {
   getVendor,
   pullFromPostmaster,
 } from 'bungie-api-ts/destiny2';
-// import { bungieApiQuery } from './bungie-api-utils';
 import { createHttpClient } from './http-client';
 
 const errors = {
@@ -28,18 +27,13 @@ const errors = {
   },
 };
 
-// shimming in the global polyfill because i am a criminal
-require('cross-fetch/polyfill');
-
 type TroubleshootingResponse = { req: Request; ErrorCode: number };
 
 const makePretendFetch = (response?: any) => (req: any) => ({
   json: () => ({ req: req as Request, ErrorCode: 1, ...response }),
 });
 const pretendHttpClient = (response?: any) =>
-  createHttpClient(makePretendFetch(response) as any as typeof fetch, '123', false);
-
-// bungieApiQuery(`/Platform/GlobalAlerts/`)
+  createHttpClient(makePretendFetch(response) as any as typeof fetch, '123');
 
 const cases: [(...params: any) => any, object | undefined][] = [
   [
@@ -122,7 +116,7 @@ test('should throw an error if there is no room in the destination', async () =>
       stackSize: 7,
     })) as any;
   }).rejects.toMatchInlineSnapshot(
-    `[BungieError: There are no item slots available to transfer this item.]`
+    `[BungieError: There are no item slots available to transfer this item.]`,
   );
 });
 
@@ -137,6 +131,6 @@ test('should throw an error if API is down for maintenance', async () => {
       stackSize: 7,
     })) as any;
   }).rejects.toMatchInlineSnapshot(
-    `[BungieError: This system is temporarily disabled for maintenance.]`
+    `[BungieError: This system is temporarily disabled for maintenance.]`,
   );
 });

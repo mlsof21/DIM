@@ -8,33 +8,34 @@ import {
   showMaterialCount,
 } from 'app/material-counts/MaterialCountsWrappers';
 import { useIsPhonePortrait } from 'app/shell/selectors';
+import { emptyObject } from 'app/utils/empty';
+import { LookupTable } from 'app/utils/util-types';
 import clsx from 'clsx';
 import { BucketHashes } from 'data/d2/generated-enums';
 import vaultIcon from 'destiny-icons/armor_types/helmet.svg';
 import consumablesIcon from 'destiny-icons/general/consumables.svg';
 import modificationsIcon from 'destiny-icons/general/modifications.svg';
 import _ from 'lodash';
-import React from 'react';
+import React, { memo } from 'react';
 import { useSelector } from 'react-redux';
 import { createSelector } from 'reselect';
 import styles from './VaultCapacity.m.scss';
 
-const bucketIcons = {
-  3313201758: modificationsIcon,
-  1469714392: consumablesIcon,
-  138197802: vaultIcon,
+const bucketIcons: LookupTable<BucketHashes, string> = {
+  [BucketHashes.Modifications]: modificationsIcon,
+  [BucketHashes.Consumables]: consumablesIcon,
+  [BucketHashes.General]: vaultIcon,
 };
 
 const vaultBucketOrder = [
   // D1
   3003523923, // Armor
   4046403665, // Weapons
-  138197802, // General
 
   // D2
-  138197802,
-  1469714392,
-  3313201758,
+  BucketHashes.General,
+  BucketHashes.Consumables,
+  BucketHashes.Modifications,
 ];
 
 /** How many items are in each vault bucket. DIM hides the vault bucket concept from users but needs the count to track progress. */
@@ -48,7 +49,15 @@ interface VaultCounts {
  * buckets are, for display. We could calculate this straight from the profile, but we want to be able to recompute it
  * when items move without reloading the profile.
  */
-function computeVaultCounts(activeStore: DimStore, vault: DimStore, buckets: InventoryBuckets) {
+function computeVaultCounts(
+  activeStore: DimStore | undefined,
+  vault: DimStore | undefined,
+  buckets: InventoryBuckets | undefined,
+) {
+  if (!activeStore || !vault || !buckets) {
+    return emptyObject<VaultCounts>();
+  }
+
   const vaultCounts: VaultCounts = {};
 
   for (const bucket of Object.values(buckets.byHash)) {
@@ -84,11 +93,11 @@ const vaultCountsSelector = createSelector(
   currentStoreSelector,
   vaultSelector,
   bucketsSelector,
-  computeVaultCounts
+  computeVaultCounts,
 );
 
 /** Current amounts and maximum capacities of the vault */
-export default React.memo(function VaultCapacity() {
+export default memo(function VaultCapacity() {
   const vaultCounts = useSelector(vaultCountsSelector);
   const mats = <MaterialCountsTooltip />;
   const isPhonePortrait = useIsPhonePortrait();
@@ -96,9 +105,10 @@ export default React.memo(function VaultCapacity() {
   return (
     <>
       {_.sortBy(Object.keys(vaultCounts), (id) => vaultBucketOrder.indexOf(parseInt(id, 10))).map(
-        (bucketId) => {
+        (bucketIdStr) => {
+          const bucketId = parseInt(bucketIdStr, 10) as BucketHashes;
           const { count, bucket } = vaultCounts[bucketId];
-          const isConsumables = bucketId === String(BucketHashes.Consumables);
+          const isConsumables = bucketId === BucketHashes.Consumables;
           const title = isConsumables ? undefined : bucket.name;
           return (
             <React.Fragment key={bucketId}>
@@ -126,7 +136,7 @@ export default React.memo(function VaultCapacity() {
               </PressTip>
             </React.Fragment>
           );
-        }
+        },
       )}
     </>
   );

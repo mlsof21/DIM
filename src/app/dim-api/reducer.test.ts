@@ -1,11 +1,11 @@
+import { SearchType } from '@destinyitemmanager/dim-api-types';
 import { DestinyAccount } from 'app/accounts/destiny-account';
 import { setItemHashTag, setItemTag } from 'app/inventory/actions';
 import { setSettingAction } from 'app/settings/actions';
 import { BungieMembershipType, DestinyClass } from 'bungie-api-ts/destiny2';
-import copy from 'fast-copy';
 import { DeleteLoadoutUpdateWithRollback } from './api-types';
-import { finishedUpdates, prepareToFlushUpdates } from './basic-actions';
-import { dimApi, DimApiState, initialState as apiInitialState } from './reducer';
+import { finishedUpdates, prepareToFlushUpdates, saveSearch } from './basic-actions';
+import { DimApiState, initialState as apiInitialState, dimApi } from './reducer';
 
 const currentAccount: DestinyAccount = {
   membershipId: '98765',
@@ -14,6 +14,7 @@ const currentAccount: DestinyAccount = {
   originalPlatformType: BungieMembershipType.TigerPsn,
   platformLabel: 'PlayStation',
   platforms: [BungieMembershipType.TigerPsn],
+  lastPlayed: new Date(),
 };
 const currentAccountKey = '98765-d2';
 
@@ -50,11 +51,11 @@ describe('setItemTag', () => {
     const updatedState = dimApi(
       state,
       setItemTag({ itemId: '1234', tag: 'favorite' }),
-      currentAccount
+      currentAccount,
     );
 
     expect(updatedState.profiles[currentAccountKey].tags['1234'].tag).toBe('favorite');
-    expect(copy(updatedState.updateQueue)).toEqual([
+    expect(updatedState.updateQueue).toEqual([
       {
         action: 'tag',
         payload: {
@@ -73,17 +74,17 @@ describe('setItemTag', () => {
     let updatedState = dimApi(
       state,
       setItemTag({ itemId: '1234', tag: 'favorite' }),
-      currentAccount
+      currentAccount,
     );
 
     updatedState = dimApi(
       updatedState,
       setItemTag({ itemId: '1234', tag: undefined }),
-      currentAccount
+      currentAccount,
     );
 
     expect(updatedState.profiles[currentAccountKey].tags['1234']).toBeUndefined();
-    expect(copy(updatedState.updateQueue)).toEqual([
+    expect(updatedState.updateQueue).toEqual([
       {
         action: 'tag',
         payload: {
@@ -117,11 +118,11 @@ describe('setItemHashTag', () => {
     const updatedState = dimApi(
       state,
       setItemHashTag({ itemHash: 1234, tag: 'favorite' }),
-      currentAccount
+      currentAccount,
     );
 
     expect(updatedState.itemHashTags[1234].tag).toBe('favorite');
-    expect(copy(updatedState.updateQueue)).toEqual([
+    expect(updatedState.updateQueue).toEqual([
       {
         action: 'item_hash_tag',
         payload: {
@@ -140,17 +141,17 @@ describe('setItemHashTag', () => {
     let updatedState = dimApi(
       state,
       setItemHashTag({ itemHash: 1234, tag: 'favorite' }),
-      currentAccount
+      currentAccount,
     );
 
     updatedState = dimApi(
       updatedState,
       setItemHashTag({ itemHash: 1234, tag: undefined }),
-      currentAccount
+      currentAccount,
     );
 
     expect(updatedState.itemHashTags[1234]).toBeUndefined();
-    expect(copy(updatedState.updateQueue)).toEqual([
+    expect(updatedState.updateQueue).toEqual([
       {
         action: 'item_hash_tag',
         payload: {
@@ -230,7 +231,7 @@ describe('prepareToFlushUpdates', () => {
         },
       },
     ];
-    expect(copy(updatedState.updateQueue)).toEqual(expected);
+    expect(updatedState.updateQueue).toEqual(expected);
   });
 
   it('can handle multiple profile updates', () => {
@@ -344,7 +345,7 @@ describe('prepareToFlushUpdates', () => {
         destinyVersion: 1,
       },
     ];
-    expect(copy(updatedState.updateQueue)).toEqual(expected);
+    expect(updatedState.updateQueue).toEqual(expected);
   });
 
   it('can handle multiple profile updates with settings last', () => {
@@ -432,7 +433,7 @@ describe('prepareToFlushUpdates', () => {
         },
       },
     ];
-    expect(copy(updatedState.updateQueue)).toEqual(expected);
+    expect(updatedState.updateQueue).toEqual(expected);
   });
 
   it('can handle loadouts', () => {
@@ -522,7 +523,7 @@ describe('prepareToFlushUpdates', () => {
         destinyVersion: 2,
       },
     ];
-    expect(copy(updatedState.updateQueue)).toEqual(expected);
+    expect(updatedState.updateQueue).toEqual(expected);
   });
 
   it('can handle tag stuff', () => {
@@ -591,7 +592,7 @@ describe('prepareToFlushUpdates', () => {
         destinyVersion: 2,
       },
     ];
-    expect(copy(updatedState.updateQueue)).toEqual(expected);
+    expect(updatedState.updateQueue).toEqual(expected);
   });
 });
 
@@ -627,10 +628,94 @@ describe('finishedUpdates', () => {
     };
     const updatedState = dimApi(
       state,
-      finishedUpdates([{ status: 'Success' }, { status: 'Success' }])
+      finishedUpdates([{ status: 'Success' }, { status: 'Success' }]),
     );
 
     expect(updatedState.updateInProgressWatermark).toBe(0);
     expect(updatedState.updateQueue).toEqual([]);
+  });
+});
+
+describe('saveSearch', () => {
+  it('can save valid queries', () => {
+    const state: DimApiState = {
+      ...initialState,
+    };
+    const updatedState = dimApi(
+      state,
+      saveSearch({ query: '(is:masterwork) (is:weapon)', saved: true, type: SearchType.Item }),
+      currentAccount,
+    );
+
+    expect(updatedState.searches).toMatchObject({
+      [1]: [],
+      [2]: [{ query: 'is:masterwork is:weapon', saved: true, type: SearchType.Item }],
+    });
+  });
+
+  it('can unsave valid queries', () => {
+    const state: DimApiState = {
+      ...initialState,
+    };
+    let updatedState = dimApi(
+      state,
+      saveSearch({ query: '(is:masterwork) (is:weapon)', saved: true, type: SearchType.Item }),
+      currentAccount,
+    );
+
+    updatedState = dimApi(
+      updatedState,
+      saveSearch({ query: '(is:masterwork) (is:weapon)', saved: false, type: SearchType.Item }),
+      currentAccount,
+    );
+
+    expect(updatedState.searches).toMatchObject({
+      [1]: [],
+      [2]: [{ query: 'is:masterwork is:weapon', saved: false, type: SearchType.Item }],
+    });
+  });
+
+  it('does not save invalid queries', () => {
+    const state: DimApiState = {
+      ...initialState,
+    };
+    const updatedState = dimApi(
+      state,
+      saveSearch({ query: 'deepsight:incomplete', saved: true, type: SearchType.Item }),
+      currentAccount,
+    );
+    expect(updatedState.searches).toMatchObject({
+      [1]: [],
+      [2]: [],
+    });
+  });
+
+  it('can unsave invalid queries', () => {
+    const state: DimApiState = {
+      ...initialState,
+      searches: {
+        [1]: [],
+        [2]: [
+          {
+            usageCount: 1,
+            lastUsage: 919191,
+            saved: true,
+            query: 'deepsight:incomplete',
+            type: SearchType.Item,
+          },
+        ],
+      },
+    };
+    const updatedState = dimApi(
+      state,
+      saveSearch({ query: 'deepsight:incomplete', saved: false, type: SearchType.Item }),
+      currentAccount,
+    );
+
+    // FIXME maybe delete this outright? It'll be cleaned up the next time DIM loads the remote profile anyway...
+    expect(updatedState.searches).toMatchObject({
+      [1]: [],
+      [2]: [{ usageCount: 1, saved: false, query: 'deepsight:incomplete' }],
+    });
   });
 });

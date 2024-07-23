@@ -1,18 +1,29 @@
-import { DestinyProfileRecordsComponent, DestinyRecordState } from 'bungie-api-ts/destiny2';
+import {
+  DestinyCharacterRecordsComponent,
+  DestinyProfileRecordsComponent,
+  DestinyRecordState,
+} from 'bungie-api-ts/destiny2';
 import exoticToCatalystRecordHash from 'data/d2/exotic-to-catalyst-record.json';
 import exoticsWithCatalysts from 'data/d2/exotics-with-catalysts';
 import { DimCatalyst } from '../item-types';
 
 export function buildCatalystInfo(
   itemHash: number,
-  profileRecords: DestinyProfileRecordsComponent | undefined
+  profileRecords: DestinyProfileRecordsComponent | undefined,
+  characterRecords: { [key: string]: DestinyCharacterRecordsComponent } | undefined,
 ): DimCatalyst | undefined {
   if (!exoticsWithCatalysts.has(itemHash)) {
     return undefined;
   }
 
   const recordHash = exoticToCatalystRecordHash[itemHash];
-  const record = profileRecords?.records[recordHash];
+  const record =
+    recordHash &&
+    (profileRecords?.records[recordHash] ??
+      (characterRecords &&
+        Object.values(characterRecords).find((records) => records.records[recordHash])?.records[
+          recordHash
+        ]));
   if (!record) {
     return undefined;
   }
@@ -20,7 +31,7 @@ export function buildCatalystInfo(
   // TODO: Can't tell the difference between unlocked and inserted for new-style catalysts?
   const complete = Boolean(
     !(record.state & DestinyRecordState.ObjectiveNotCompleted) ||
-      record.state & DestinyRecordState.RecordRedeemed
+      record.state & DestinyRecordState.RecordRedeemed,
   );
   // TODO: seasonal exotics (e.g. Ticuu's) are unlocked by default but still show as obscured - they're run by a quest instead of a record?
 
@@ -30,5 +41,5 @@ export function buildCatalystInfo(
   // 2. could do a second pass on items populating it? rip through all the quest items, find ones whose rewards reference a catalyst, then go back and fix up the items' DimCatalyst info? would need a mapping from item hash to catalyst item hash (which I guess we can match up by name...)
   const unlocked = !(record.state & DestinyRecordState.Obscured);
 
-  return { complete, unlocked };
+  return { complete, unlocked, objectives: record.objectives };
 }

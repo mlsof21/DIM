@@ -1,6 +1,4 @@
-import { useHotkey } from 'app/hotkeys/useHotkey';
-import { t } from 'app/i18next-t';
-import { sortedStoresSelector } from 'app/inventory/selectors';
+import { createItemContextSelector, sortedStoresSelector } from 'app/inventory/selectors';
 import { DimStore } from 'app/inventory/store-types';
 import { applySocketOverrides } from 'app/inventory/store/override-sockets';
 import { useD2Definitions } from 'app/manifest/selectors';
@@ -9,8 +7,8 @@ import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
 import { useSubscription } from 'use-subscription';
 import { DimItem } from '../inventory/item-types';
-import { hideItemPopup, showItemPopup$ } from './item-popup';
 import ItemPopup from './ItemPopup';
+import { hideItemPopup, showItemPopup$ } from './item-popup';
 
 interface Props {
   boundarySelector?: string;
@@ -23,6 +21,7 @@ interface Props {
 export default function ItemPopupContainer({ boundarySelector }: Props) {
   const stores = useSelector(sortedStoresSelector);
   const defs = useD2Definitions();
+  const itemCreationContext = useSelector(createItemContextSelector);
 
   const currentItem = useSubscription(showItemPopup$);
 
@@ -33,13 +32,11 @@ export default function ItemPopupContainer({ boundarySelector }: Props) {
     onClose();
   }, [pathname]);
 
-  useHotkey('esc', t('Hotkey.ClearDialog'), onClose);
-
   // Try to find an updated version of the item!
   let item = currentItem?.item && maybeFindItem(currentItem.item, stores);
   // Apply socket overrides to customize the item (e.g. from a loadout)
   if (item && defs && currentItem?.extraInfo?.socketOverrides) {
-    item = applySocketOverrides(defs, item, currentItem.extraInfo.socketOverrides);
+    item = applySocketOverrides(itemCreationContext, item, currentItem.extraInfo.socketOverrides);
   }
 
   if (!currentItem || !item) {
@@ -48,6 +45,7 @@ export default function ItemPopupContainer({ boundarySelector }: Props) {
 
   return (
     <ItemPopup
+      key={item.index}
       item={item}
       boundarySelector={boundarySelector}
       element={currentItem.element}

@@ -1,5 +1,6 @@
 import { t } from 'app/i18next-t';
 import { CanceledError } from 'app/utils/cancel';
+import { convertToError } from 'app/utils/errors';
 import clsx from 'clsx';
 import { motion, MotionProps, Transition } from 'framer-motion';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,11 +20,11 @@ const showErrorDuration = 5000;
 
 interface Props extends MotionProps {
   notification: Notify;
-  onClose(notification: Notify): void;
+  onClose: (notification: Notify) => void;
 }
 
 export default function Notification({ notification, onClose, ...animation }: Props) {
-  const [mouseover, setMouseover] = useState(false);
+  const [hovering, setHovering] = useState(false);
   const [success, setSuccess] = useState<boolean | undefined>();
   const [error, setError] = useState<NotificationError | undefined>();
 
@@ -37,20 +38,22 @@ export default function Notification({ notification, onClose, ...animation }: Pr
     if (!error && !success && notification.promise) {
       notification.promise
         .then(() => setSuccess(true))
-        .catch((e) => (e instanceof CanceledError ? setSuccess(true) : setError(e)));
+        .catch((e) =>
+          e instanceof CanceledError ? setSuccess(true) : setError(convertToError(e)),
+        );
     } else if (notification.duration || error) {
       timer.current = window.setTimeout(
         () => {
-          if (!mouseover) {
+          if (!hovering) {
             onClose(notification);
           }
         },
-        error ? Math.max(notification.duration, showErrorDuration) : notification.duration
+        error ? Math.max(notification.duration, showErrorDuration) : notification.duration,
       );
     } else {
       window.setTimeout(() => onClose(notification), 0);
     }
-  }, [error, success, notification, mouseover, onClose]);
+  }, [error, success, notification, hovering, onClose]);
 
   const clearTimer = () => {
     if (timer.current) {
@@ -70,20 +73,20 @@ export default function Notification({ notification, onClose, ...animation }: Pr
     }
   };
 
-  const onMouseOver = () => {
+  const hover = () => {
     clearTimer();
-    setMouseover(true);
+    setHovering(true);
   };
 
-  const onMouseOut = () => {
-    setMouseover(false);
+  const stopHover = () => {
+    setHovering(false);
     setupTimer();
   };
 
   const progressTarget =
-    mouseover || Boolean(!error && !success && notification.promise) ? '0%' : '100%';
+    hovering || Boolean(!error && !success && notification.promise) ? '0%' : '100%';
 
-  const transition: Transition = mouseover
+  const transition: Transition = hovering
     ? {
         type: 'tween',
         ease: 'easeOut',
@@ -107,28 +110,28 @@ export default function Notification({ notification, onClose, ...animation }: Pr
       role="alert"
       onClick={onClick}
       {...animation}
-      onHoverStart={onMouseOver}
-      onHoverEnd={onMouseOut}
-      onTapStart={onMouseOver}
+      onPointerEnter={hover}
+      onPointerLeave={stopHover}
+      onPointerDown={hover}
     >
       <div
         className={clsx(
           styles.inner,
-          error ? styles.error : success ? styles.success : typeStyles[notification.type]
+          error ? styles.error : success ? styles.success : typeStyles[notification.type],
         )}
       >
         <div className={styles.contents}>
-          {icon && <div className={styles.icon}>{icon}</div>}
+          {Boolean(icon) && <div className={styles.icon}>{icon}</div>}
           <div className={styles.details}>
             <div className={styles.title}>{title}</div>
-            {body && <div>{body}</div>}
+            {Boolean(body) && <div>{body}</div>}
             {!error && notification.onCancel && (
               <NotificationButton onClick={notification.onCancel}>
                 {success || error ? t('Notification.OK') : t('Notification.Cancel')}
               </NotificationButton>
             )}
           </div>
-          {trailer && <div className={styles.trailer}>{trailer}</div>}
+          {Boolean(trailer) && <div className={styles.trailer}>{trailer}</div>}
         </div>
         {(success || error || !notification.promise) &&
           typeof notification.duration === 'number' && (

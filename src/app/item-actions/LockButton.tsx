@@ -5,33 +5,30 @@ import { setItemLockState } from 'app/inventory/item-move-service';
 import { hideItemPopup } from 'app/item-popup/item-popup';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import clsx from 'clsx';
-import { BucketHashes } from 'data/d2/generated-enums';
 import React, { useState } from 'react';
 import { DimItem } from '../inventory/item-types';
-import {
-  AppIcon,
-  lockIcon,
-  starIcon,
-  starOutlineIcon,
-  trackedIcon,
-  unlockedIcon,
-  unTrackedIcon,
-} from '../shell/icons';
+import { AppIcon, lockIcon, trackedIcon, unlockedIcon, unTrackedIcon } from '../shell/icons';
 import ActionButton from './ActionButton';
 import styles from './LockButton.m.scss';
 
-interface Props {
+export default function LockButton({
+  type,
+  item,
+  disabled,
+  noHotkey,
+  children,
+}: {
   item: DimItem;
   type: 'lock' | 'track';
+  disabled?: boolean;
+  noHotkey?: boolean;
   children?: React.ReactNode;
-}
-
-export default function LockButton({ type, item, children }: Props) {
+}) {
   const [locking, setLocking] = useState(false);
   const dispatch = useThunkDispatch();
 
   const lockUnlock = async () => {
-    if (locking) {
+    if (locking || disabled) {
       return;
     }
 
@@ -56,27 +53,29 @@ export default function LockButton({ type, item, children }: Props) {
     }
   };
 
-  useHotkey('l', t('Hotkey.LockUnlock'), lockUnlock);
+  useHotkey('l', t('Hotkey.LockUnlock'), lockUnlock, noHotkey);
 
   const title = lockButtonTitle(item, type);
 
   const icon =
     type === 'lock'
       ? item.locked
-        ? item.bucket.hash === BucketHashes.Finishers
-          ? starIcon
-          : lockIcon
-        : item.bucket.hash === BucketHashes.Finishers
-        ? starOutlineIcon
+        ? lockIcon
         : unlockedIcon
       : item.tracked
-      ? trackedIcon
-      : unTrackedIcon;
+        ? trackedIcon
+        : unTrackedIcon;
 
   const iconElem = <AppIcon className={clsx({ [styles.inProgress]: locking })} icon={icon} />;
 
   return (
-    <ActionButton onClick={lockUnlock} title={title}>
+    <ActionButton
+      onClick={lockUnlock}
+      title={disabled ? t('MovePopup.LockUnlock.AutoLock') : title}
+      disabled={disabled}
+      hotkey="l"
+      hotkeyDescription={t('Hotkey.LockUnlock')}
+    >
       {children ? (
         <>
           {iconElem} {children}
@@ -90,17 +89,14 @@ export default function LockButton({ type, item, children }: Props) {
 
 function lockButtonTitle(item: DimItem, type: 'lock' | 'track') {
   const data = { itemType: item.typeName };
-  return (
-    (type === 'lock'
-      ? !item.locked
-        ? item.bucket.hash === BucketHashes.Finishers
-          ? t('MovePopup.FavoriteUnFavorite.Favorite', data)
-          : t('MovePopup.LockUnlock.Lock', data)
-        : item.bucket.hash === BucketHashes.Finishers
-        ? t('MovePopup.FavoriteUnFavorite.Unfavorite', data)
-        : t('MovePopup.LockUnlock.Unlock', data)
-      : !item.tracked
+  // Let's keep these translations around?
+  // t('MovePopup.FavoriteUnFavorite.Favorite', data)
+  // t('MovePopup.FavoriteUnFavorite.Unfavorite', data)
+  return type === 'lock'
+    ? !item.locked
+      ? t('MovePopup.LockUnlock.Lock', data)
+      : t('MovePopup.LockUnlock.Unlock', data)
+    : !item.tracked
       ? t('MovePopup.TrackUntrack.Track', data)
-      : t('MovePopup.TrackUntrack.Untrack', data)) + ' [L]'
-  );
+      : t('MovePopup.TrackUntrack.Untrack', data);
 }

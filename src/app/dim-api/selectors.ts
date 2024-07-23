@@ -1,4 +1,8 @@
-import { defaultLoadoutParameters, DestinyVersion } from '@destinyitemmanager/dim-api-types';
+import {
+  DestinyVersion,
+  SearchType,
+  defaultLoadoutParameters,
+} from '@destinyitemmanager/dim-api-types';
 import { DestinyAccount } from 'app/accounts/destiny-account';
 import { currentAccountSelector, destinyVersionSelector } from 'app/accounts/selectors';
 import { Settings } from 'app/settings/initial-settings';
@@ -25,8 +29,11 @@ export const settingSelector =
  */
 export const savedLoadoutParametersSelector = createSelector(
   (state: RootState) => settingsSelector(state).loParameters,
-  (loParams) => ({ ...defaultLoadoutParameters, ...loParams })
+  (loParams) => ({ ...defaultLoadoutParameters, ...loParams }),
 );
+
+export const savedLoStatConstraintsByClassSelector = (state: RootState) =>
+  settingsSelector(state).loStatConstraintsByClass;
 
 export const languageSelector = (state: RootState) => settingsSelector(state).language;
 
@@ -35,8 +42,7 @@ export const collapsedSelector =
   (state: RootState): boolean | undefined =>
     settingsSelector(state).collapsedSections[sectionId];
 
-export const customStatsSelector = (state: RootState) =>
-  settingsSelector(state).customTotalStatsByClass;
+export const customStatsSelector = (state: RootState) => settingsSelector(state).customStats;
 
 export const apiPermissionGrantedSelector = (state: RootState) =>
   state.dimApi.apiPermissionGranted === true;
@@ -52,18 +58,26 @@ export const currentProfileSelector = createSelector(
   currentAccountSelector,
   (state: RootState) => state.dimApi.profiles,
   (currentAccount, profiles) =>
-    currentAccount ? profiles[makeProfileKeyFromAccount(currentAccount)] : undefined
+    currentAccount ? profiles[makeProfileKeyFromAccount(currentAccount)] : undefined,
+);
+
+const recentSearchesSelectorCached = createSelector(
+  (state: RootState) => state.dimApi.searches[destinyVersionSelector(state)],
+  (_state: RootState, searchType: SearchType) => searchType,
+  (searches, searchType) => searches.filter((s) => (s.type ?? SearchType.Item) === searchType),
 );
 
 /**
- * Returns all recent/saved searches.
- *
- * TODO: Sort/trim this list
+ * Returns all recent/saved searches of the given type.
  */
-export const recentSearchesSelector = (state: RootState) =>
-  state.dimApi.searches[destinyVersionSelector(state)];
+export const recentSearchesSelector = (searchType: SearchType) => (state: RootState) =>
+  recentSearchesSelectorCached(state, searchType);
 
 export const trackedTriumphsSelector = createSelector(
   currentProfileSelector,
-  (profile) => profile?.triumphs || []
+  (profile) => profile?.triumphs || [],
 );
+
+/** Server control over the issue/campaign banner */
+export const issueBannerEnabledSelector = (state: RootState) =>
+  state.dimApi.globalSettings.showIssueBanner;

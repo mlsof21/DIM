@@ -2,14 +2,11 @@ import {
   FatalTokenError,
   getActiveToken as getBungieToken,
 } from 'app/bungie-api/authenticated-fetch';
-import { dedupePromise } from 'app/utils/util';
+import { dedupePromise } from 'app/utils/promises';
 import { HttpClientConfig } from 'bungie-api-ts/http';
 
 const DIM_API_HOST = 'https://api.destinyitemmanager.com';
-export const API_KEY =
-  $DIM_FLAVOR === 'release' || $DIM_FLAVOR === 'beta' || $DIM_FLAVOR === 'test'
-    ? $DIM_API_KEY
-    : localStorage.getItem('dimApiKey')!;
+export const API_KEY = $DIM_FLAVOR !== 'dev' ? $DIM_API_KEY : localStorage.getItem('dimApiKey')!;
 
 const localStorageKey = 'dimApiToken';
 
@@ -18,7 +15,7 @@ const localStorageKey = 'dimApiToken';
  */
 export async function unauthenticatedApi<T>(
   config: HttpClientConfig,
-  noApiKey?: boolean
+  noApiKey?: boolean,
 ): Promise<T> {
   if (!noApiKey && !API_KEY) {
     throw new Error('No DIM API key configured');
@@ -26,10 +23,11 @@ export async function unauthenticatedApi<T>(
 
   let url = `${DIM_API_HOST}${config.url}`;
   if (config.params) {
-    url = `${url}?${new URLSearchParams(config.params)}`;
+    // TODO: properly type HttpClientConfig
+    url = `${url}?${new URLSearchParams(config.params as Record<string, string>).toString()}`;
   }
 
-  const headers = {};
+  const headers: RequestInit['headers'] = {};
   if (config.body) {
     headers['Content-Type'] = 'application/json';
   }
@@ -42,22 +40,27 @@ export async function unauthenticatedApi<T>(
       method: config.method,
       body: config.body ? JSON.stringify(config.body) : undefined,
       headers,
-    })
+    }),
   );
 
   if (response.status === 401) {
     // Delete our token
     deleteDimApiToken();
-    throw new FatalTokenError('Unauthorized call to ' + config.url);
+    throw new FatalTokenError(`Unauthorized call to ${config.url}`);
   }
   if (response.ok) {
     return response.json() as Promise<T>;
   }
 
-  const jsonResponse = await response.json();
-  throw new Error(
-    'Failed to call DIM API: [' + response.status + '] - ' + JSON.stringify(jsonResponse)
-  );
+  let responseData;
+  try {
+    responseData = (await response.json()) as { error: string; message: string };
+  } catch {}
+  if (responseData?.error) {
+    throw new Error(`${responseData.error}: ${responseData.message}`);
+  }
+
+  throw new Error(`Failed to call DIM API: ${response.status}`);
 }
 
 /**
@@ -72,10 +75,11 @@ export async function authenticatedApi<T>(config: HttpClientConfig): Promise<T> 
 
   let url = `${DIM_API_HOST}${config.url}`;
   if (config.params) {
-    url = `${url}?${new URLSearchParams(config.params)}`;
+    // TODO: properly type HttpClientConfig
+    url = `${url}?${new URLSearchParams(config.params as Record<string, string>).toString()}`;
   }
 
-  const headers = {
+  const headers: RequestInit['headers'] = {
     Authorization: `Bearer ${token.accessToken}`,
     'X-API-Key': API_KEY,
   };
@@ -88,7 +92,7 @@ export async function authenticatedApi<T>(config: HttpClientConfig): Promise<T> 
       method: config.method,
       body: config.body ? JSON.stringify(config.body) : undefined,
       headers,
-    })
+    }),
   );
 
   if (response.status === 401) {
@@ -99,15 +103,15 @@ export async function authenticatedApi<T>(config: HttpClientConfig): Promise<T> 
     return response.json() as Promise<T>;
   }
 
-  let responseData: { error: string; message: string } | undefined;
+  let responseData;
   try {
-    responseData = await response.json();
+    responseData = (await response.json()) as { error: string; message: string };
   } catch {}
   if (responseData?.error) {
     throw new Error(`${responseData.error}: ${responseData.message}`);
   }
 
-  throw new Error('Failed to call DIM API: ' + response.status);
+  throw new Error(`Failed to call DIM API: ${response.status}`);
 }
 
 export interface DimAuthToken {
@@ -122,7 +126,7 @@ export interface DimAuthToken {
 /**
  * Get all token information from saved storage.
  */
-function getToken(): DimAuthToken | undefined {
+export function getToken(): DimAuthToken | undefined {
   const tokenString = localStorage.getItem(localStorageKey);
   return tokenString ? (JSON.parse(tokenString) as DimAuthToken) : undefined;
 }
@@ -163,7 +167,7 @@ const refreshToken = dedupePromise(async () => {
 
     return authToken;
   } catch (e) {
-    if (!($DIM_FLAVOR === 'release' || $DIM_FLAVOR === 'beta')) {
+    if ($DIM_FLAVOR === 'dev') {
       throw new FatalTokenError('DIM API Key Incorrect');
     }
     throw e;

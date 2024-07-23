@@ -9,7 +9,7 @@ import styles from './LoadoutBucketDropTarget.m.scss';
 interface Props {
   className?: string;
   children?: React.ReactNode;
-  onItemLocked(lockedItem: DimItem): void;
+  onItemLocked: (lockedItem: DimItem) => void;
 }
 
 /**
@@ -28,7 +28,7 @@ export default function LoadoutBucketDropTarget({ onItemLocked, children, classN
       collect: (monitor) => ({ isOver: monitor.isOver(), canDrop: monitor.canDrop() }),
       drop: onItemLocked,
     }),
-    [bucketTypes, onItemLocked]
+    [bucketTypes, onItemLocked],
   );
   return (
     <div

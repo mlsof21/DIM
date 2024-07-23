@@ -7,7 +7,6 @@ import { DEFAULT_ORNAMENTS, DEFAULT_SHADER } from 'app/search/d2-known-values';
 import { get, set } from 'app/storage/idb-keyval';
 import { ThunkResult } from 'app/store/types';
 import { DimError } from 'app/utils/dim-error';
-import { mergedCollectiblesSelector } from 'app/vendors/selectors';
 import { Destiny2CoreSettings } from 'bungie-api-ts/core';
 import {
   AwaAuthorizationResult,
@@ -28,8 +27,8 @@ import { showNotification } from '../notifications/notifications';
 import { awaItemChanged } from './actions';
 import { DimItem, DimSocket } from './item-types';
 import {
+  createItemContextSelector,
   currentStoreSelector,
-  d2BucketsSelector,
   profileResponseSelector,
   storesSelector,
 } from './selectors';
@@ -42,8 +41,8 @@ let awaCache: {
 export function canInsertPlug(
   socket: DimSocket,
   plugItemHash: number,
-  destiny2CoreSettings: Destiny2CoreSettings,
-  defs: D2ManifestDefinitions
+  destiny2CoreSettings: Destiny2CoreSettings | undefined,
+  defs: D2ManifestDefinitions,
 ) {
   return $featureFlags.awa || canInsertForFree(socket, plugItemHash, destiny2CoreSettings, defs);
 }
@@ -51,7 +50,7 @@ export function canInsertPlug(
 function hasInsertionCost(defs: D2ManifestDefinitions, plug: DestinyInventoryItemDefinition) {
   if (plug.plug?.insertionMaterialRequirementHash) {
     const requirements = defs.MaterialRequirementSet.get(
-      plug.plug?.insertionMaterialRequirementHash
+      plug.plug?.insertionMaterialRequirementHash,
     );
     // There are some items that explicitly point to a definition that says it costs 0 glimmer:
     return requirements.materials.some((m) => m.count !== 0);
@@ -62,15 +61,18 @@ function hasInsertionCost(defs: D2ManifestDefinitions, plug: DestinyInventoryIte
 function canInsertForFree(
   socket: DimSocket,
   plugItemHash: number,
-  destiny2CoreSettings: Destiny2CoreSettings,
-  defs: D2ManifestDefinitions
+  destiny2CoreSettings: Destiny2CoreSettings | undefined,
+  defs: D2ManifestDefinitions,
 ) {
-  const { insertPlugFreeProtectedPlugItemHashes, insertPlugFreeBlockedSocketTypeHashes } =
-    destiny2CoreSettings;
   const pluggedDef = (socket.actuallyPlugged || socket.plugged)?.plugDef;
   if (
-    (pluggedDef && (insertPlugFreeProtectedPlugItemHashes || []).includes(pluggedDef.hash)) ||
-    (insertPlugFreeBlockedSocketTypeHashes || []).includes(socket.socketDefinition.socketTypeHash)
+    (pluggedDef &&
+      (destiny2CoreSettings?.insertPlugFreeProtectedPlugItemHashes || []).includes(
+        pluggedDef.hash,
+      )) ||
+    (destiny2CoreSettings?.insertPlugFreeBlockedSocketTypeHashes || []).includes(
+      socket.socketDefinition.socketTypeHash,
+    )
   ) {
     return false;
   }
@@ -82,7 +84,7 @@ function canInsertForFree(
     Boolean(
       socket.socketDefinition.reusablePlugItems.length > 0 ||
         socket.socketDefinition.reusablePlugSetHash ||
-        socket.socketDefinition.randomizedPlugSetHash
+        socket.socketDefinition.randomizedPlugSetHash,
     ) &&
     // And have no cost to insert
     !hasInsertionCost(defs, plug) &&
@@ -103,7 +105,7 @@ function canInsertForFree(
 function checkIrreversiblePlugging(
   socket: DimSocket,
   storeId: string,
-  profileResponse?: DestinyProfileResponse
+  profileResponse?: DestinyProfileResponse,
 ) {
   const plugged = socket.actuallyPlugged || socket.plugged;
   if (
@@ -117,10 +119,10 @@ function checkIrreversiblePlugging(
       plugSetHash &&
       profileResponse &&
       unlockedItemsForCharacterOrProfilePlugSet(profileResponse, plugSetHash, storeId).has(
-        plugged.plugDef.hash
+        plugged.plugDef.hash,
       );
     const itemUnlocked = socket.reusablePlugItems?.some(
-      (p) => p.enabled && p.plugItemHash === plugged.plugDef.hash
+      (p) => p.enabled && p.plugItemHash === plugged.plugDef.hash,
     );
 
     if (!profileUnlocked && !itemUnlocked) {
@@ -137,7 +139,7 @@ export function insertPlug(item: DimItem, socket: DimSocket, plugItemHash: numbe
   return async (dispatch, getState) => {
     const account = currentAccountSelector(getState())!;
     const defs = d2ManifestSelector(getState())!;
-    const coreSettings = getState().manifest.destiny2CoreSettings!;
+    const coreSettings = getState().manifest.destiny2CoreSettings;
 
     // This is a special case for transmog ornaments - you can't apply a
     // transmog ornament to the same item it was created with. So instead we
@@ -163,13 +165,14 @@ export function insertPlug(item: DimItem, socket: DimSocket, plugItemHash: numbe
     const irreversiblePlugCheck = checkIrreversiblePlugging(
       socket,
       storeId,
-      profileResponseSelector(getState())
+      profileResponseSelector(getState()),
     );
     if (irreversiblePlugCheck.protected && irreversiblePlugCheck.plug) {
       throw new DimError(
+        'AWA.IrreversiblePlugging',
         t('AWA.IrreversiblePlugging', {
           plug: irreversiblePlugCheck.plug.plugDef.displayProperties.name,
-        })
+        }),
       );
     }
 
@@ -187,7 +190,7 @@ async function awaInsertSocketPlugFree(
   storeId: string,
   item: DimItem,
   socket: DimSocket,
-  plugItemHash: number
+  plugItemHash: number,
 ) {
   return insertSocketPlugFree(authenticatedHttpClient, {
     itemId: item.id,
@@ -210,7 +213,7 @@ async function awaInsertSocketPlug(
   storeId: string,
   item: DimItem,
   socket: DimSocket,
-  plugItemHash: number
+  plugItemHash: number,
 ) {
   if (!$featureFlags.awa) {
     throw new Error('AWA.NotSupported');
@@ -239,19 +242,16 @@ async function awaInsertSocketPlug(
  */
 function refreshItemAfterAWA(changes: DestinyItemChangeResponse): ThunkResult {
   return async (dispatch, getState) => {
-    const defs = d2ManifestSelector(getState())!;
-    const buckets = d2BucketsSelector(getState())!;
+    const itemCreationContext = createItemContextSelector(getState());
     const stores = storesSelector(getState());
-    const mergedCollectibles = mergedCollectiblesSelector(getState());
-    const newItem = makeItemSingle(defs, buckets, changes.item, stores, mergedCollectibles);
+    const newItem = makeItemSingle(itemCreationContext, changes.item, stores);
 
     dispatch(
       awaItemChanged({
         item: newItem,
         changes,
-        defs: d2ManifestSelector(getState())!,
-        buckets: d2BucketsSelector(getState())!,
-      })
+        itemCreationContext: itemCreationContext,
+      }),
     );
   };
 }
@@ -268,7 +268,7 @@ async function getAwaToken(
   account: DestinyAccount,
   action: AwaType,
   storeId: string,
-  item?: DimItem
+  item?: DimItem,
 ): Promise<string> {
   if (!awaCache) {
     // load from cache first time

@@ -1,10 +1,11 @@
+import useBulkNote from 'app/dim-ui/useBulkNote';
 import ItemActionsDropdown from 'app/item-actions/ItemActionsDropdown';
 import { querySelector } from 'app/shell/selectors';
 import { motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
-import { filteredItemsSelector, queryValidSelector } from './search-filter';
-import './search-filter.scss';
+import { searchButtonAnimateVariants } from './SearchBar';
+import { filteredItemsSelector, queryValidSelector } from './items/item-search-filter';
 
 /**
  * The three-dots dropdown menu of actions for the search bar that act on searched items.
@@ -17,6 +18,8 @@ export default function MainSearchBarMenu() {
   const filteredItems = useSelector(filteredItemsSelector);
   const onInventory = location.pathname.endsWith('inventory');
 
+  const [promptDialog, bulkNote] = useBulkNote();
+
   const showSearchActions = onInventory;
   if (!showSearchActions) {
     return null;
@@ -26,15 +29,18 @@ export default function MainSearchBarMenu() {
     <motion.div
       layout
       key="action"
-      exit={{ scale: 0 }}
-      initial={{ scale: 0 }}
-      animate={{ scale: 1 }}
+      variants={searchButtonAnimateVariants}
+      exit="hidden"
+      initial="hidden"
+      animate="shown"
     >
+      {promptDialog}
       <ItemActionsDropdown
         filteredItems={filteredItems}
         searchActive={showSearchCount}
         searchQuery={searchQuery}
         fixed={true}
+        bulkNote={bulkNote}
       />
     </motion.div>
   );

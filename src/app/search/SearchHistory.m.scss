@@ -24,10 +24,15 @@
   }
 }
 
+.tabs {
+  max-width: fit-content;
+  margin-top: 8px;
+}
+
 .iconButton {
   composes: resetButton from '../dim-ui/common.m.scss';
   margin-left: 6px;
-  color: white;
+  color: var(--theme-text);
   padding: 0 2px;
 }
 
@@ -41,4 +46,8 @@
   button {
     float: right;
   }
+}
+
+.sorter {
+  margin-left: 2px;
 }

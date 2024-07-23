@@ -1,12 +1,13 @@
 @use '../../variables.scss' as *;
 
-.mods {
-  flex: 1;
-}
-
 .modsGrid {
   --item-icon-size: calc(0.8 * var(--item-size));
   min-width: calc(5 * var(--item-icon-size) + 4 * var(--item-margin));
+
+  @include phone-portrait {
+    min-width: min(calc(5 * var(--item-icon-size) + 4 * var(--item-margin)), calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+  }
   display: grid;
   grid-template-columns: repeat(auto-fill, var(--item-icon-size));
   gap: 4px;
@@ -14,6 +15,9 @@
   align-items: flex-start;
   :global(.item) {
     --item-size: var(--item-icon-size);
+  }
+  :global(.item-img) {
+    border-color: var(--theme-item-socket-border);
   }
 }
 
@@ -26,6 +30,10 @@
   opacity: 0.3;
 }
 
+.artifactUnlock {
+  background-color: #0a3b40;
+}
+
 .pickModButton {
   composes: resetButton from '../../dim-ui/common.m.scss';
   color: #999;
@@ -33,11 +41,9 @@
   height: var(--item-icon-size);
   width: var(--item-icon-size);
 
-  &:focus {
-    border-color: $orange;
-  }
-
-  &:hover {
+  &:hover,
+  &:focus-visible {
+    border-color: var(--theme-accent-primary);
     color: white;
   }
 }
@@ -46,5 +52,5 @@
   display: flex;
   flex-flow: row wrap;
   margin-top: 8px;
-  @include flex-gap(4px);
+  gap: 4px;
 }

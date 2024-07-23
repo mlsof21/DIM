@@ -9,22 +9,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout DIM
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.I18N_PAT }}
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-          cache: yarn
+          node-version-file: '.nvmrc'
+          cache: pnpm
 
       - name: Install
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Download updated i18n files
-        uses: crowdin/github-action@1.4.7
+        uses: crowdin/github-action@v2.0.0
         with:
           upload_sources: false
           upload_translations: false
@@ -38,7 +40,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: sort locale ${lang}.json
+      - name: sort locale json
         run: |
           allLocales=("en" "de" "es" "esMX" "fr" "it" "ja" "ko" "pl" "ptBR" "ru" "zhCHS" "zhCHT")
           for lang in ${allLocales[@]}; do
@@ -46,15 +48,20 @@ jobs:
           done
 
       - name: build browsercheck utils
-        run: yarn bcu
+        run: pnpm bcu
 
-      - name: Check for new files (DIM)
-        id: porcelain
-        run: echo ::set-output name=porcelain::"$(git status --porcelain)"
+      - name: porcelain check
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: HEAD
+          filters: |
+            changed:
+              - '**'
 
       - name: Commit files
-        if: steps.porcelain.outputs.porcelain
-        uses: stefanzweifel/git-auto-commit-action@v4
+        if: steps.filter.outputs.changed
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: i18n
           commit_user_name: DIM i18n Bot

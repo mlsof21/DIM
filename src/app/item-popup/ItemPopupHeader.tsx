@@ -1,18 +1,15 @@
 import ArmorySheet from 'app/armory/ArmorySheet';
 import BungieImage from 'app/dim-ui/BungieImage';
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import ElementIcon from 'app/dim-ui/ElementIcon';
+import { useHotkey } from 'app/hotkeys/useHotkey';
 import { t } from 'app/i18next-t';
 import { D1BucketHashes } from 'app/search/d1-known-values';
 import type { ItemTierName } from 'app/search/d2-known-values';
-import { Portal } from 'app/utils/temp-container';
-import {
-  DamageType,
-  DestinyAmmunitionType,
-  DestinyClass,
-  DestinyEnergyType,
-} from 'bungie-api-ts/destiny2';
+import { LookupTable } from 'app/utils/util-types';
+import { DestinyAmmunitionType, DestinyClass } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
-import { BucketHashes } from 'data/d2/generated-enums';
+import { BucketHashes, ItemCategoryHashes } from 'data/d2/generated-enums';
 import heavy from 'destiny-icons/general/ammo-heavy.svg';
 import primary from 'destiny-icons/general/ammo-primary.svg';
 import special from 'destiny-icons/general/ammo-special.svg';
@@ -20,7 +17,7 @@ import { useState } from 'react';
 import { DimItem } from '../inventory/item-types';
 import styles from './ItemPopupHeader.m.scss';
 
-const tierClassName: Partial<Record<ItemTierName, string>> = {
+const tierClassName: LookupTable<ItemTierName, string> = {
   Common: styles.common,
   Uncommon: styles.uncommon,
   Rare: styles.rare,
@@ -37,29 +34,31 @@ export default function ItemPopupHeader({
   noLink?: boolean;
 }) {
   const [showArmory, setShowArmory] = useState(false);
+  useHotkey('a', t('Hotkey.Armory'), () => setShowArmory(true));
 
-  const showElementIcon =
-    item.element &&
-    (item.bucket.inWeapons
-      ? item.element.enumValue !== DamageType.Kinetic
-      : item.element.enumValue !== DestinyEnergyType.Ghost &&
-        item.element.enumValue !== DestinyEnergyType.Subclass);
+  const showElementIcon = Boolean(item.element);
 
-  const linkToArmory = item.destinyVersion === 2;
+  const linkToArmory = !noLink && item.destinyVersion === 2;
 
   return (
-    <div
+    <button
+      type="button"
+      disabled={!linkToArmory}
       className={clsx(styles.header, tierClassName[item.tier], {
         [styles.masterwork]: item.masterwork,
         [styles.pursuit]: item.pursuit,
         [styles.armory]: linkToArmory,
       })}
-      onClick={linkToArmory ? () => setShowArmory(true) : undefined}
+      title={linkToArmory ? `${t('Hotkey.Armory')} [A]` : undefined}
+      aria-keyshortcuts={linkToArmory ? 'a' : undefined}
+      onClick={() => setShowArmory(true)}
     >
-      {noLink || item.destinyVersion === 1 ? (
+      {!linkToArmory ? (
         <span className={styles.title}>{item.name}</span>
       ) : (
-        <a className={styles.title}>{item.name}</a>
+        <h1 className={styles.title}>
+          <RichDestinyText text={item.name} ownerId={item.owner} />
+        </h1>
       )}
 
       <div className={styles.subtitle}>
@@ -77,38 +76,45 @@ export default function ItemPopupHeader({
         <div className={styles.details}>
           {showElementIcon && <ElementIcon element={item.element} className={styles.elementIcon} />}
           <div className={styles.power}>{item.primaryStat?.value}</div>
-          {item.powerCap && <div className={styles.powerCap}>| {item.powerCap} </div>}
-          {item.pursuit?.questStepNum && (
+          {item.maxStackSize > 1 &&
+            !item.itemCategoryHashes.includes(ItemCategoryHashes.Mods_Ornament) && (
+              <div className={styles.itemType}>
+                {item.amount.toLocaleString()} / {item.maxStackSize.toLocaleString()}
+              </div>
+            )}
+          {item.pursuit?.questLine && (
             <div className={styles.itemType}>
               {t('MovePopup.Subtitle.QuestProgress', {
-                questStepNum: item.pursuit.questStepNum,
-                questStepsTotal: item.pursuit.questStepsTotal,
+                questStepNum: item.pursuit.questLine.questStepNum,
+                questStepsTotal: item.pursuit.questLine.questStepsTotal,
               })}
             </div>
           )}
         </div>
       </div>
       {showArmory && linkToArmory && (
-        <Portal>
-          <ArmorySheet onClose={() => setShowArmory(false)} item={item} />
-        </Portal>
+        <ArmorySheet onClose={() => setShowArmory(false)} item={item} />
       )}
-    </div>
+    </button>
   );
 }
 
-const ammoIcons = {
+const ammoIcons: LookupTable<DestinyAmmunitionType, string> = {
   [DestinyAmmunitionType.Primary]: primary,
   [DestinyAmmunitionType.Special]: special,
   [DestinyAmmunitionType.Heavy]: heavy,
 };
 
-export function AmmoIcon({ type }: { type: DestinyAmmunitionType }) {
+export function AmmoIcon({ type, className }: { type: DestinyAmmunitionType; className?: string }) {
   return (
     <img
-      className={clsx(styles.ammoIcon, {
-        [styles.primary]: type === DestinyAmmunitionType.Primary,
-      })}
+      className={clsx(
+        styles.ammoIcon,
+        {
+          [styles.primary]: type === DestinyAmmunitionType.Primary,
+        },
+        className
+      )}
       src={ammoIcons[type]}
     />
   );
@@ -125,16 +131,17 @@ export function ItemTypeName({ item, className }: { item: DimItem; className?: s
       item.classTypeNameLocalized[0].toUpperCase() + item.classTypeNameLocalized.slice(1)) ||
     '';
 
-  if (!(item.typeName || classType)) {
+  const title =
+    item.typeName && classType
+      ? t('MovePopup.Subtitle.Type', {
+          classType,
+          typeName: item.typeName,
+        })
+      : item.typeName || classType;
+
+  if (!title) {
     return null;
   }
 
-  return (
-    <div className={className}>
-      {t('MovePopup.Subtitle.Type', {
-        classType,
-        typeName: item.typeName,
-      })}
-    </div>
-  );
+  return <div className={className}>{title}</div>;
 }

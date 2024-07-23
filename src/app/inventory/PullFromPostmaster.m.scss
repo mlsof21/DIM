@@ -3,9 +3,9 @@
 .badge {
   border-radius: 50%;
   border-radius: 10px;
-  background: $orange;
+  background: var(--theme-accent-primary);
   padding: 0 4px;
-  color: black;
+  color: var(--theme-text-invert);
   font-size: 9px;
   transition: all 150ms ease-out;
 }
@@ -15,10 +15,10 @@
   align-self: center;
   display: inline-flex;
   align-items: center;
-  @include horizontal-space-children(4px);
+  gap: 4px;
 
   &:hover .badge {
     background-color: black;
-    color: $orange;
+    color: var(--theme-accent-primary);
   }
 }

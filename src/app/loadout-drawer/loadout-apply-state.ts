@@ -2,12 +2,12 @@
 
 import { DimItem } from 'app/inventory/item-types';
 import { Observable } from 'app/utils/observable';
-import produce from 'immer';
+import { produce } from 'immer';
 
 /**
  * What part of the loadout application process are we currently in?
  */
-export enum LoadoutApplyPhase {
+export const enum LoadoutApplyPhase {
   NotStarted,
   /** De-equip loadout items from other characters so they can be moved */
   Deequip,
@@ -21,13 +21,15 @@ export enum LoadoutApplyPhase {
   ApplyMods,
   /** Clear out empty space */
   ClearSpace,
+  /** Applying in game loadout */
+  InGameLoadout,
   /** Terminal state, loadout succeeded */
   Succeeded,
   /** Terminal state, loadout failed */
   Failed,
 }
 
-export enum LoadoutItemState {
+export const enum LoadoutItemState {
   Pending,
   /** A successful state (maybe we don't need to distinguish this) for items that didn't need to be moved. */
   AlreadyThere,
@@ -47,7 +49,7 @@ export interface LoadoutItemResult {
   readonly error?: Error;
 }
 
-export enum LoadoutModState {
+export const enum LoadoutModState {
   Pending,
   Unassigned,
   Applied,
@@ -60,7 +62,7 @@ export interface LoadoutModResult {
   readonly error?: Error;
 }
 
-export enum LoadoutSocketOverrideState {
+export const enum LoadoutSocketOverrideState {
   Pending,
   Applied,
   Failed,
@@ -108,6 +110,9 @@ export interface LoadoutApplyState {
    */
   // TODO: how to get a consistent display sort?
   readonly modStates: LoadoutModResult[];
+
+  /** Whether the in game loadout could not be equipped because you're in an activity. */
+  readonly inGameLoadoutInActivity: boolean;
 }
 
 export type LoadoutStateGetter = () => LoadoutApplyState;
@@ -124,7 +129,7 @@ export function makeLoadoutApplyState(): [
   /** Set the current state to a new state */
   set: LoadoutStateUpdater,
   /** An observable that can be used to subscribe to state updates. */
-  observable: Observable<LoadoutApplyState>
+  observable: Observable<LoadoutApplyState>,
 ] {
   // TODO: fill in more of the initial state from the loadout, or wait for loadout-apply to do it?
   const initialLoadoutApplyState: LoadoutApplyState = {
@@ -133,6 +138,7 @@ export function makeLoadoutApplyState(): [
     itemStates: {},
     socketOverrideStates: {},
     modStates: [],
+    inGameLoadoutInActivity: false,
   };
 
   const observable = new Observable(initialLoadoutApplyState);
@@ -156,7 +162,7 @@ export function setLoadoutApplyPhase(phase: LoadoutApplyPhase) {
 export function setModResult(result: LoadoutModResult, equipNotPossible?: boolean) {
   return produce<LoadoutApplyState>((state) => {
     const mod = state.modStates.find(
-      (m) => m.modHash === result.modHash && m.state === LoadoutModState.Pending
+      (m) => m.modHash === result.modHash && m.state === LoadoutModState.Pending,
     );
     if (mod) {
       mod.state = result.state;
@@ -173,7 +179,7 @@ export function setSocketOverrideResult(
   socketIndex: number,
   socketState: LoadoutSocketOverrideState,
   error?: Error,
-  equipNotPossible?: boolean
+  equipNotPossible?: boolean,
 ) {
   return produce<LoadoutApplyState>((state) => {
     const thisSocketResult = state.socketOverrideStates[item.index].results[socketIndex];
@@ -193,22 +199,22 @@ export function setSocketOverrideResult(
  * Has any part of the loadout application process failed?
  */
 export function anyActionFailed(state: LoadoutApplyState) {
+  if (state.inGameLoadoutInActivity) {
+    return true;
+  }
   if (
     Object.values(state.itemStates).some(
-      (s) => s.state !== LoadoutItemState.Succeeded && s.state !== LoadoutItemState.AlreadyThere
+      (s) => s.state !== LoadoutItemState.Succeeded && s.state !== LoadoutItemState.AlreadyThere,
     )
   ) {
     return true;
   }
   if (
     Object.values(state.socketOverrideStates).some((s) =>
-      Object.values(s.results).some((r) => r.state !== LoadoutSocketOverrideState.Applied)
+      Object.values(s.results).some((r) => r.state !== LoadoutSocketOverrideState.Applied),
     )
   ) {
     return true;
   }
-  if (state.modStates.some((s) => s.state !== LoadoutModState.Applied)) {
-    return true;
-  }
-  return false;
+  return state.modStates.some((s) => s.state !== LoadoutModState.Applied);
 }

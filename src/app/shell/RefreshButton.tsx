@@ -1,16 +1,27 @@
+import { destinyVersionSelector } from 'app/accounts/selectors';
+import { PressTip, useTooltipCustomization } from 'app/dim-ui/PressTip';
 import { useHotkey } from 'app/hotkeys/useHotkey';
 import { t } from 'app/i18next-t';
 import { isDragging$ } from 'app/inventory/drag-events';
-import { autoRefreshEnabledSelector } from 'app/inventory/selectors';
+import {
+  autoRefreshEnabledSelector,
+  profileErrorSelector,
+  profileMintedSelector,
+} from 'app/inventory/selectors';
 import { useEventBusListener } from 'app/utils/hooks';
+import { i15dDurationFromMsWithSeconds } from 'app/utils/time';
 import clsx from 'clsx';
 import { useCallback, useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useSubscription } from 'use-subscription';
-import { AppIcon, refreshIcon } from './icons';
+import ErrorPanel from './ErrorPanel';
+import styles from './RefreshButton.m.scss';
+import { AppIcon, faClock, faExclamationTriangle, refreshIcon } from './icons';
 import { loadingTracker } from './loading-tracker';
 import { refresh } from './refresh-events';
-import styles from './RefreshButton.m.scss';
+
+/** We consider the profile stale if it's out of date with respect to the game data by this much */
+const STALE_PROFILE_THRESHOLD = 90_000;
 
 export default function RefreshButton({ className }: { className?: string }) {
   const [disabled, setDisabled] = useState(false);
@@ -18,7 +29,7 @@ export default function RefreshButton({ className }: { className?: string }) {
 
   const handleChanges = useCallback(
     () => setDisabled(!navigator.onLine || document.hidden || isDragging$.getCurrentValue()),
-    []
+    [],
   );
   const active = useSubscription(loadingTracker.active$);
   useEventBusListener(isDragging$, handleChanges);
@@ -35,16 +46,98 @@ export default function RefreshButton({ className }: { className?: string }) {
 
   useHotkey('r', t('Hotkey.RefreshInventory'), refresh);
 
+  const outOfDate = useProfileOutOfDate();
+  const profileError = useSelector(profileErrorSelector);
+  const showOutOfDateWarning = outOfDate && !active && !autoRefresh;
+
   return (
-    <button
-      type="button"
-      className={clsx(styles.refreshButton, className, { disabled })}
-      onClick={refresh}
-      title={t('Header.Refresh') + (autoRefresh ? '\n' + t('Header.AutoRefresh') : '')}
-      aria-keyshortcuts="R"
-    >
-      <AppIcon icon={refreshIcon} spinning={active} />
-      {autoRefresh && <div className={styles.userIsPlaying} />}
-    </button>
+    <PressTip tooltip={<RefreshButtonTooltip autoRefresh={autoRefresh} />}>
+      <button
+        type="button"
+        className={clsx(styles.refreshButton, className, { disabled })}
+        onClick={refresh}
+        title={t('Header.Refresh') + (autoRefresh ? `\n${t('Header.AutoRefresh')}` : '')}
+        aria-keyshortcuts="R"
+      >
+        <AppIcon icon={refreshIcon} spinning={active} />
+        {autoRefresh && <div className={styles.userIsPlaying} />}
+        {(profileError || showOutOfDateWarning) && (
+          <div className={styles.outOfDate}>
+            <AppIcon icon={profileError ? faExclamationTriangle : faClock} />
+          </div>
+        )}
+      </button>
+    </PressTip>
+  );
+}
+
+function useProfileAge() {
+  const profileMintedDate = useSelector(profileMintedSelector);
+  const [_tickState, setTickState] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTickState((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  return profileAge(profileMintedDate);
+}
+
+function profileAge(profileMintedDate: Date) {
+  return profileMintedDate.getTime() === 0 ? undefined : Date.now() - profileMintedDate.getTime();
+}
+
+function profileOutOfDate(profileMintedDate: Date) {
+  const profileAgeMs = profileAge(profileMintedDate);
+  return profileAgeMs !== undefined && profileAgeMs > STALE_PROFILE_THRESHOLD;
+}
+
+/** Like useProfileAge but only sets a boolean to avoid lots of re-renders. */
+function useProfileOutOfDate() {
+  const profileMintedDate = useSelector(profileMintedSelector);
+  const [outOfDate, setOutOfDate] = useState(profileOutOfDate(profileMintedDate));
+  useEffect(() => {
+    setOutOfDate(profileOutOfDate(profileMintedDate));
+    const interval = setInterval(() => {
+      setOutOfDate(profileOutOfDate(profileMintedDate));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [profileMintedDate]);
+
+  return outOfDate;
+}
+
+function RefreshButtonTooltip({ autoRefresh }: { autoRefresh: boolean }) {
+  const profileAge = useProfileAge();
+  const profileError = useSelector(profileErrorSelector);
+  const isManifestError = profileError?.name === 'ManifestError';
+  const destinyVersion = useSelector(destinyVersionSelector);
+
+  useTooltipCustomization({
+    className: profileError ? styles.errorTooltip : null,
+  });
+
+  return (
+    <>
+      {profileError ? (
+        <div className={styles.errorDetails}>
+          <ErrorPanel
+            title={
+              isManifestError
+                ? t('Accounts.ErrorLoadManifest')
+                : t('Accounts.ErrorLoadInventory', { version: destinyVersion })
+            }
+            error={profileError}
+            frameless
+          />
+        </div>
+      ) : (
+        <>
+          <b>{t('Header.Refresh') + (autoRefresh ? `\n${t('Header.AutoRefresh')}` : '')}</b>
+          {profileAge !== undefined && (
+            <div>{t('Header.ProfileAge', { age: i15dDurationFromMsWithSeconds(profileAge) })}</div>
+          )}
+        </>
+      )}
+    </>
   );
 }

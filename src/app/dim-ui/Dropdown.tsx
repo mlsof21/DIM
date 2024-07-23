@@ -1,9 +1,9 @@
 import { Placement } from '@popperjs/core';
-import { kebabIcon, moveDownIcon } from 'app/shell/icons';
+import { expandDownIcon, kebabIcon } from 'app/shell/icons';
 import AppIcon from 'app/shell/icons/AppIcon';
 import clsx from 'clsx';
 import { useSelect } from 'downshift';
-import React, { ReactNode, useRef } from 'react';
+import { ReactNode, useRef } from 'react';
 import styles from './Dropdown.m.scss';
 import { usePopper } from './usePopper';
 
@@ -15,7 +15,7 @@ interface DropdownOption {
   key: string;
   content: ReactNode;
   disabled?: boolean;
-  onSelected(): void;
+  onSelected: () => void;
 }
 
 export type Option = Separator | DropdownOption;
@@ -31,6 +31,7 @@ interface Props {
   offset?: number;
   fixed?: boolean;
   placement?: Placement;
+  label: string;
 }
 
 function isDropdownOption(option: Option): option is DropdownOption {
@@ -54,12 +55,12 @@ export default function Dropdown({
   offset,
   fixed,
   placement = kebab ? 'bottom-end' : 'bottom-start',
+  label,
 }: Props) {
   const { isOpen, getToggleButtonProps, getMenuProps, highlightedIndex, getItemProps, reset } =
     useSelect({
       items,
       itemToString: (i) => i?.key || 'none',
-      circularNavigation: true,
       onSelectedItemChange: ({ selectedItem }) => {
         if (selectedItem && isDropdownOption(selectedItem) && !selectedItem.disabled) {
           selectedItem.onSelected();
@@ -67,10 +68,11 @@ export default function Dropdown({
         // Unselect to reset the state
         reset();
       },
+      isItemDisabled: (item) => (isDropdownOption(item) ? Boolean(item.disabled) : true),
     });
 
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   usePopper({
     contents: menuRef,
@@ -84,18 +86,18 @@ export default function Dropdown({
     <div className={className}>
       <button
         type="button"
-        {...getToggleButtonProps({ ref: buttonRef, disabled })}
+        {...getToggleButtonProps({ ref: buttonRef, disabled, title: label })}
         className={kebab ? styles.kebabButton : styles.button}
       >
         {kebab ? (
           <AppIcon icon={kebabIcon} />
         ) : (
           <>
-            {children} <AppIcon icon={moveDownIcon} className={styles.arrow} />
+            {children} <AppIcon icon={expandDownIcon} className={styles.arrow} />
           </>
         )}
       </button>
-      <div {...getMenuProps({ ref: menuRef })} className={styles.menu}>
+      <div {...getMenuProps({ ref: menuRef, className: styles.menu })}>
         {isOpen &&
           items.map((item, index) =>
             !isDropdownOption(item) ? (
@@ -105,7 +107,6 @@ export default function Dropdown({
                 {...getItemProps({
                   item,
                   index,
-                  disabled: true,
                 })}
               />
             ) : (
@@ -118,12 +119,11 @@ export default function Dropdown({
                 {...getItemProps({
                   item,
                   index,
-                  disabled: item.disabled,
                 })}
               >
                 {item.content}
               </div>
-            )
+            ),
           )}
       </div>
     </div>

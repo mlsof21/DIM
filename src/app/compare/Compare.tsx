@@ -1,40 +1,39 @@
 import BungieImage from 'app/dim-ui/BungieImage';
+import { SheetHorizontalScrollContainer } from 'app/dim-ui/SheetHorizontalScrollContainer';
 import { t } from 'app/i18next-t';
 import { locateItem } from 'app/inventory/locate-item';
+import { createItemContextSelector } from 'app/inventory/selectors';
 import {
   applySocketOverrides,
   useSocketOverridesForItems,
 } from 'app/inventory/store/override-sockets';
 import { recoilValue } from 'app/item-popup/RecoilStat';
 import { useD2Definitions } from 'app/manifest/selectors';
+import { showNotification } from 'app/notifications/notifications';
 import { statLabels } from 'app/organizer/Columns';
+import { weaponMasterworkY2SocketTypeHash } from 'app/search/d2-known-values';
 import Checkbox from 'app/settings/Checkbox';
 import { useSetting } from 'app/settings/hooks';
 import { AppIcon, faAngleLeft, faAngleRight, faList } from 'app/shell/icons';
 import { acquisitionRecencyComparator } from 'app/shell/item-comparators';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
-import { isEventFromFirefoxScrollbar } from 'app/utils/browsers';
 import { emptyArray } from 'app/utils/empty';
 import { DestinyDisplayPropertiesDefinition } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
 import { StatHashes } from 'data/d2/generated-enums';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import _ from 'lodash';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
-import { useLocation } from 'react-router';
 import { Link } from 'react-router-dom';
 import Sheet from '../dim-ui/Sheet';
 import { DimItem, DimSocket } from '../inventory/item-types';
 import { chainComparator, compareBy, reverseComparator } from '../utils/comparators';
-import { endCompareSession, removeCompareItem, updateCompareQuery } from './actions';
 import styles from './Compare.m.scss';
-import './compare.scss';
 import CompareItem from './CompareItem';
 import CompareSuggestions from './CompareSuggestions';
-import {
-  compareItemsSelector,
-  compareOrganizerLinkSelector,
-  compareSessionSelector,
-} from './selectors';
+import { endCompareSession, removeCompareItem, updateCompareQuery } from './actions';
+import { CompareSession } from './reducer';
+import { compareItemsSelector, compareOrganizerLinkSelector } from './selectors';
 
 export interface StatInfo {
   id: number | 'EnergyCapacity';
@@ -49,23 +48,25 @@ export interface StatInfo {
 }
 
 /** a DimStat with, at minimum, a statHash */
-export type MinimalStat = { statHash: number; value: number; base?: number };
+export interface MinimalStat {
+  statHash: number;
+  value: number;
+  base?: number;
+}
 type StatGetter = (item: DimItem) => undefined | MinimalStat;
-
-const isTouch = 'ontouchstart' in window;
 
 // TODO: replace rows with Column from organizer
 // TODO: CSS grid-with-sticky layout
 // TODO: dropdowns for query buttons
 // TODO: freeform query
 // TODO: Allow minimizing the sheet (to make selection easier)
-// TODO: memoize
-export default function Compare() {
+export default function Compare({ session }: { session: CompareSession }) {
   const dispatch = useThunkDispatch();
   const defs = useD2Definitions()!;
   const [compareBaseStats, setCompareBaseStats] = useSetting('compareBaseStats');
-  const session = useSelector(compareSessionSelector);
-  const rawCompareItems = useSelector(compareItemsSelector(session?.vendorCharacterId));
+  const [assumeWeaponMasterwork, setAssumeWeaponMasterwork] = useSetting('compareWeaponMasterwork');
+  const itemCreationContext = useSelector(createItemContextSelector);
+  const rawCompareItems = useSelector(compareItemsSelector(session.vendorCharacterId));
   const organizerLink = useSelector(compareOrganizerLinkSelector);
 
   /** The stat row to highlight */
@@ -73,74 +74,72 @@ export default function Compare() {
   /** The stat row to sort by */
   const [sortedHash, setSortedHash] = useState<string | number>();
   const [sortBetterFirst, setSortBetterFirst] = useState<boolean>(true);
-  const [socketOverrides, onPlugClicked, resetSocketOverrides] = useSocketOverridesForItems();
+  const [socketOverrides, onPlugClicked] = useSocketOverridesForItems();
+
+  const comparingArmor = rawCompareItems[0]?.bucket.inArmor;
+  const comparingWeapons = rawCompareItems[0]?.bucket.inWeapons;
+  const doCompareBaseStats = Boolean(compareBaseStats && comparingArmor);
+  const doAssumeWeaponMasterworks = Boolean(defs && assumeWeaponMasterwork && comparingWeapons);
 
   // Produce new items which have had their sockets changed
-  const compareItems = useMemo(
-    () =>
-      defs
-        ? rawCompareItems.map((i) => applySocketOverrides(defs, i, socketOverrides[i.id]))
-        : rawCompareItems,
-    [defs, rawCompareItems, socketOverrides]
-  );
+  const compareItems = useMemo(() => {
+    let items = rawCompareItems;
+    if (doAssumeWeaponMasterworks) {
+      items = items.map((i) => {
+        const y2MasterworkSocket = i.sockets?.allSockets.find(
+          (socket) => socket.socketDefinition.socketTypeHash === weaponMasterworkY2SocketTypeHash,
+        );
+        const plugSet = y2MasterworkSocket?.plugSet;
+        const plugged = y2MasterworkSocket?.plugged;
+        if (plugSet && plugged) {
+          const fullMasterworkPlug = _.maxBy(
+            plugSet.plugs.filter(
+              (p) => p.plugDef.plug.plugCategoryHash === plugged.plugDef.plug.plugCategoryHash,
+            ),
+            (plugOption) => plugOption.plugDef.investmentStats[0]?.value,
+          );
+          if (fullMasterworkPlug) {
+            return applySocketOverrides(itemCreationContext, i, {
+              [y2MasterworkSocket.socketIndex]: fullMasterworkPlug.plugDef.hash,
+            });
+          }
+        }
+        return i;
+      });
+    }
+    items = items.map((i) => applySocketOverrides(itemCreationContext, i, socketOverrides[i.id]));
+
+    return items;
+  }, [itemCreationContext, doAssumeWeaponMasterworks, rawCompareItems, socketOverrides]);
 
   const cancel = useCallback(() => {
-    // TODO: this is why we need a container, right? So we don't have to reset state
-    setHighlight(undefined);
-    setSortedHash(undefined);
-    resetSocketOverrides();
     dispatch(endCompareSession());
-  }, [dispatch, resetSocketOverrides]);
-
-  const hasSession = Boolean(session);
-  const hasItems = compareItems.length > 0;
-  const show = hasSession && hasItems;
-
-  const firstCompareItem = compareItems.length > 0 ? compareItems[0] : undefined;
-  const destinyVersion = show ? firstCompareItem?.destinyVersion : 2;
-  useEffect(() => {
-    if (show && destinyVersion !== undefined) {
-      ga('send', 'pageview', `/profileMembershipId/d${destinyVersion}/compare`);
-    }
-  }, [show, destinyVersion]);
-
-  // Reset on path changes
-  const { pathname } = useLocation();
-  useEffect(() => {
-    cancel();
-  }, [pathname, cancel]);
-
-  // Clear the session on unmount
-  useEffect(
-    () => () => {
-      cancel();
-    },
-    [cancel]
-  );
+  }, [dispatch]);
 
   // Reset if there ever are no items
+  const hasItems = compareItems.length > 0;
   useEffect(() => {
-    if (hasSession && !hasItems) {
+    if (!hasItems) {
+      showNotification({
+        type: 'warning',
+        title: t('Compare.Error.Invalid'),
+        body: session.query,
+      });
       cancel();
     }
-  }, [cancel, hasItems, hasSession]);
-
-  // TODO: make a function that takes items and perk overrides and produces new items!
+  }, [cancel, hasItems, session.query]);
 
   // Memoize computing the list of stats
   const allStats = useMemo(
     () => getAllStats(compareItems, compareBaseStats),
-    [compareItems, compareBaseStats]
+    [compareItems, compareBaseStats],
   );
-
-  const comparingArmor = firstCompareItem?.bucket.inArmor;
-  const doCompareBaseStats = Boolean(compareBaseStats && comparingArmor);
 
   const updateQuery = useCallback(
     (newQuery: string) => {
       dispatch(updateCompareQuery(newQuery));
     },
-    [dispatch]
+    [dispatch],
   );
 
   const remove = useCallback(
@@ -151,7 +150,7 @@ export default function Compare() {
         dispatch(removeCompareItem(item));
       }
     },
-    [cancel, compareItems.length, dispatch]
+    [cancel, compareItems.length, dispatch],
   );
 
   const changeSort = (newSortedHash?: string | number) => {
@@ -161,46 +160,43 @@ export default function Compare() {
   };
 
   // If the session was started with a specific item, this is it
-  const initialItem = session?.initialItemId
+  const initialItem = session.initialItemId
     ? compareItems.find((i) => i.id === session.initialItemId)
     : undefined;
+  const firstCompareItem = compareItems[0];
   // The example item is the one we'll use for generating suggestion buttons
   const exampleItem = initialItem || firstCompareItem;
 
-  const comparator = sortCompareItemsComparator(
-    sortedHash,
-    sortBetterFirst,
-    doCompareBaseStats,
-    allStats,
-    initialItem
-  );
-  const sortedComparisonItems = Array.from(compareItems).sort(comparator);
-
-  const items = useMemo(
-    () => (
+  const items = useMemo(() => {
+    const comparator = sortCompareItemsComparator(
+      sortedHash,
+      sortBetterFirst,
+      doCompareBaseStats,
+      allStats,
+      session.initialItemId,
+    );
+    const sortedComparisonItems = compareItems.toSorted(comparator);
+    return (
       <CompareItems
         items={sortedComparisonItems}
         allStats={allStats}
         remove={remove}
-        setHighlight={isTouch ? undefined : setHighlight}
+        setHighlight={setHighlight}
         onPlugClicked={onPlugClicked}
         doCompareBaseStats={doCompareBaseStats}
-        initialItemId={session?.initialItemId}
+        initialItemId={session.initialItemId}
       />
-    ),
-    [
-      allStats,
-      doCompareBaseStats,
-      onPlugClicked,
-      remove,
-      session?.initialItemId,
-      sortedComparisonItems,
-    ]
-  );
-
-  if (!show) {
-    return null;
-  }
+    );
+  }, [
+    allStats,
+    compareItems,
+    doCompareBaseStats,
+    onPlugClicked,
+    remove,
+    session.initialItemId,
+    sortBetterFirst,
+    sortedHash,
+  ]);
 
   const header = (
     <div className={styles.options}>
@@ -210,6 +206,14 @@ export default function Compare() {
           name="compareBaseStats"
           value={compareBaseStats}
           onChange={setCompareBaseStats}
+        />
+      )}
+      {comparingWeapons && defs && (
+        <Checkbox
+          label={t('Compare.AssumeMasterworked')}
+          name="compareWeaponMasterwork"
+          value={assumeWeaponMasterwork}
+          onChange={setAssumeWeaponMasterwork}
         />
       )}
       {exampleItem && <CompareSuggestions exampleItem={exampleItem} onQueryChanged={updateQuery} />}
@@ -224,37 +228,35 @@ export default function Compare() {
 
   return (
     <Sheet onClose={cancel} header={header} allowClickThrough>
-      <div className="loadout-drawer compare">
-        <div
-          className={styles.bucket}
-          onMouseLeave={isTouch ? undefined : () => setHighlight(undefined)}
-        >
-          <div className={clsx('compare-item', styles.fixedLeft)}>
-            <div className={styles.spacer} />
-            {allStats.map((stat) => (
-              <div
-                key={stat.id}
-                className={clsx(styles.statLabel, {
-                  [styles.sorted]: stat.id === sortedHash,
-                })}
-                onMouseOver={isTouch ? undefined : () => setHighlight(stat.id)}
-                onClick={() => changeSort(stat.id)}
-              >
-                {stat.displayProperties.hasIcon && (
-                  <span title={stat.displayProperties.name}>
-                    <BungieImage src={stat.displayProperties.icon} />
-                  </span>
-                )}
-                {stat.id in statLabels ? t(statLabels[stat.id]) : stat.displayProperties.name}{' '}
-                {stat.id === sortedHash && (
-                  <AppIcon icon={sortBetterFirst ? faAngleRight : faAngleLeft} />
-                )}
-                {stat.id === highlight && <div className={styles.highlightBar} />}
-              </div>
-            ))}
-          </div>
-          {items}
+      <div className={styles.bucket} onPointerLeave={() => setHighlight(undefined)}>
+        <div className={styles.statList}>
+          <div className={styles.spacer} />
+          {allStats.map((stat) => (
+            <div
+              key={stat.id}
+              className={clsx(styles.statLabel, {
+                [styles.sortDesc]: stat.id === sortedHash && sortBetterFirst,
+                [styles.sortAsc]: stat.id === sortedHash && !sortBetterFirst,
+              })}
+              onPointerEnter={() => setHighlight(stat.id)}
+              onClick={() => changeSort(stat.id)}
+            >
+              {stat.displayProperties.hasIcon && (
+                <span title={stat.displayProperties.name}>
+                  <BungieImage src={stat.displayProperties.icon} />
+                </span>
+              )}
+              {stat.id in statLabels
+                ? t(statLabels[stat.id as StatHashes]!)
+                : stat.displayProperties.name}{' '}
+              {stat.id === sortedHash && (
+                <AppIcon icon={sortBetterFirst ? faAngleRight : faAngleLeft} />
+              )}
+              {stat.id === highlight && <div className={styles.highlightBar} />}
+            </div>
+          ))}
         </div>
+        {items}
       </div>
     </Sheet>
   );
@@ -274,47 +276,11 @@ function CompareItems({
   items: DimItem[];
   allStats: StatInfo[];
   remove: (item: DimItem) => void;
-  setHighlight?: React.Dispatch<React.SetStateAction<string | number | undefined>>;
+  setHighlight: React.Dispatch<React.SetStateAction<string | number | undefined>>;
   onPlugClicked: (value: { item: DimItem; socket: DimSocket; plugHash: number }) => void;
 }) {
-  // This uses pointer events to directly set the scroll position based on
-  // dragging the items. This works around an iOS bug around nested draggables,
-  // but also is kinda nice on desktop. I wasn't able to get it to do an
-  // inertial animation after releasing.
-
-  const ref = useRef<HTMLDivElement>(null);
-  const dragStateRef = useRef<{ scrollPosition: number; pointerDownPosition: number }>();
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    if (isEventFromFirefoxScrollbar(e)) {
-      return;
-    }
-
-    dragStateRef.current = {
-      pointerDownPosition: e.clientX,
-      scrollPosition: ref.current!.scrollLeft,
-    };
-    ref.current!.setPointerCapture(e.pointerId);
-  }, []);
-  const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    dragStateRef.current = undefined;
-    ref.current!.releasePointerCapture(e.pointerId);
-  }, []);
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (dragStateRef.current !== undefined) {
-      const { scrollPosition, pointerDownPosition } = dragStateRef.current;
-      ref.current!.scrollLeft = scrollPosition - (e.clientX - pointerDownPosition);
-    }
-  }, []);
-
   return (
-    <div
-      ref={ref}
-      className={styles.items}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
-    >
+    <SheetHorizontalScrollContainer>
       {items.map((item) => (
         <CompareItem
           item={item}
@@ -328,7 +294,7 @@ function CompareItems({
           isInitialItem={initialItemId === item.id}
         />
       ))}
-    </div>
+    </SheetHorizontalScrollContainer>
   );
 }
 
@@ -337,12 +303,12 @@ function sortCompareItemsComparator(
   sortBetterFirst: boolean,
   compareBaseStats: boolean,
   allStats: StatInfo[],
-  initialItem?: DimItem
+  initialItemId?: string,
 ) {
   if (!sortedHash) {
     return chainComparator(
-      compareBy((item) => item !== initialItem),
-      acquisitionRecencyComparator
+      compareBy((item) => item.id !== initialItemId),
+      acquisitionRecencyComparator,
     );
   }
 
@@ -368,8 +334,8 @@ function sortCompareItemsComparator(
         return shouldReverse ? -statValue : statValue;
       }),
       compareBy((i) => i.index),
-      compareBy((i) => i.name)
-    )
+      compareBy((i) => i.name),
+    ),
   );
 }
 
@@ -386,9 +352,9 @@ function getAllStats(comparisonItems: DimItem[], compareBaseStats: boolean): Sta
     stats.push(
       makeFakeStat(
         firstComparison.primaryStat.statHash,
-        firstComparison.primaryStat.stat.displayProperties,
-        (item: DimItem) => item.primaryStat || undefined
-      )
+        firstComparison.primaryStatDisplayProperties!,
+        (item: DimItem) => item.primaryStat || undefined,
+      ),
     );
   }
 
@@ -404,8 +370,8 @@ function getAllStats(comparisonItems: DimItem[], compareBaseStats: boolean): Sta
           }) ||
           undefined,
         10,
-        false
-      )
+        false,
+      ),
     );
   }
 
@@ -446,11 +412,11 @@ function getAllStats(comparisonItems: DimItem[], compareBaseStats: boolean): Sta
       if (itemStat) {
         stat.min = Math.min(
           stat.min,
-          (compareBaseStats ? itemStat.base ?? itemStat.value : itemStat.value) || 0
+          (compareBaseStats ? itemStat.base ?? itemStat.value : itemStat.value) || 0,
         );
         stat.max = Math.max(
           stat.max,
-          (compareBaseStats ? itemStat.base ?? itemStat.value : itemStat.value) || 0
+          (compareBaseStats ? itemStat.base ?? itemStat.value : itemStat.value) || 0,
         );
         stat.enabled = stat.min !== stat.max;
       }
@@ -466,7 +432,7 @@ function makeFakeStat(
   getStat: StatGetter,
   statMaximumValue = 0,
   bar = false,
-  lowerBetter = false
+  lowerBetter = false,
 ): StatInfo {
   if (typeof displayProperties === 'string') {
     displayProperties = { name: displayProperties } as DestinyDisplayPropertiesDefinition;

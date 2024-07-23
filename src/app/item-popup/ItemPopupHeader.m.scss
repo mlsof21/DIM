@@ -1,32 +1,42 @@
 @use '../variables.scss' as *;
 
 .header {
+  composes: resetButton from 'app/dim-ui/common.m.scss';
+  display: block;
+  text-align: left;
+  width: 100%;
   font-size: 15px;
   line-height: 17px;
   letter-spacing: -0.02em;
   padding: 10px;
-  cursor: pointer;
 
   background-color: #555;
   color: #eee;
-  a {
-    color: #eee;
-  }
 }
 
 .armory {
-  &:hover {
-    a {
+  &:hover,
+  &:focus-visible {
+    outline: none;
+    h1 {
       text-decoration: underline;
     }
+    cursor: pointer;
   }
 }
 
 .title {
   @include destiny-header;
-  font-size: 21px;
+  font-size: 21px !important;
   line-height: 24px;
   text-decoration: none;
+  margin: 0 !important;
+  padding: 0;
+
+  // Prevent the title running into the sheet close button
+  @include phone-portrait {
+    margin: 0 32px 0 0 !important;
+  }
 }
 
 .subtitle {
@@ -73,18 +83,10 @@
 
 .itemType {
   opacity: 0.7;
-  word-break: break-word;
 }
 
 .power {
   margin: 0 4px 0 2px;
-}
-
-.powerCap {
-  color: #efe59d;
-  font-size: 12px;
-  line-height: 16px;
-  align-self: flex-start;
 }
 
 .primary {
@@ -111,9 +113,6 @@
   /* stylelint-disable-next-line no-descending-specificity */
   a {
     color: #222;
-  }
-  .powerCap {
-    color: #0009ff;
   }
 }
 

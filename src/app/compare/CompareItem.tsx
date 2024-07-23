@@ -1,9 +1,9 @@
 import { PressTip } from 'app/dim-ui/PressTip';
-import { t } from 'app/i18next-t';
-import { itemNoteSelector } from 'app/inventory/dim-item-info';
+import { useDynamicStringReplacer } from 'app/dim-ui/destiny-symbols/RichDestinyText';
+import { t, tl } from 'app/i18next-t';
 import ItemPopupTrigger from 'app/inventory/ItemPopupTrigger';
 import { moveItemTo } from 'app/inventory/move-item';
-import { currentStoreSelector } from 'app/inventory/selectors';
+import { currentStoreSelector, notesSelector } from 'app/inventory/selectors';
 import ActionButton from 'app/item-actions/ActionButton';
 import { LockActionButton, TagActionButton } from 'app/item-actions/ActionButtons';
 import { useD2Definitions } from 'app/manifest/selectors';
@@ -11,7 +11,7 @@ import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { useSetCSSVarToHeight } from 'app/utils/hooks';
 import { isD1Item } from 'app/utils/item-utils';
 import clsx from 'clsx';
-import _ from 'lodash';
+import { noop } from 'lodash';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
@@ -37,15 +37,15 @@ export default memo(function CompareItem({
   item: DimItem;
   stats: StatInfo[];
   compareBaseStats?: boolean;
-  itemClick(item: DimItem): void;
-  remove(item: DimItem): void;
-  setHighlight?(value?: string | number): void;
-  onPlugClicked(value: { item: DimItem; socket: DimSocket; plugHash: number }): void;
+  itemClick: (item: DimItem) => void;
+  remove: (item: DimItem) => void;
+  setHighlight: (value?: string | number) => void;
+  onPlugClicked: (value: { item: DimItem; socket: DimSocket; plugHash: number }) => void;
   isInitialItem: boolean;
 }) {
   const headerRef = useRef<HTMLDivElement>(null);
   useSetCSSVarToHeight(headerRef, '--compare-item-height');
-  const itemNotes = useSelector(itemNoteSelector(item));
+  const itemNotes = useSelector(notesSelector(item));
   const dispatch = useThunkDispatch();
   const currentStore = useSelector(currentStoreSelector)!;
   const pullItem = useCallback(() => {
@@ -66,9 +66,9 @@ export default memo(function CompareItem({
               <AppIcon icon={faArrowCircleDown} />
             </ActionButton>
           )}
-          {item.lockable ? <LockActionButton item={item} /> : <div />}
+          {item.lockable ? <LockActionButton item={item} noHotkey /> : <div />}
           {item.taggable ? <TagActionButton item={item} label={false} hideKeys={true} /> : <div />}
-          <div className={styles.close} onClick={() => remove(item)} role="button" tabIndex={0} />
+          <button type="button" className={styles.close} onClick={() => remove(item)} />
         </div>
         <div
           className={clsx(styles.itemName, {
@@ -83,7 +83,7 @@ export default memo(function CompareItem({
         <ItemPopupTrigger item={item} noCompare={true}>
           {(ref, onClick) => (
             <div className={styles.itemAside} ref={ref} onClick={onClick}>
-              <PressTip minimal className={styles.itemAside} tooltip={itemNotes}>
+              <PressTip minimal tooltip={itemNotes}>
                 <ConnectedInventoryItem item={item} />
               </PressTip>
             </div>
@@ -91,11 +91,16 @@ export default memo(function CompareItem({
         </ItemPopupTrigger>
       </div>
     ),
-    [isInitialItem, item, itemClick, pullItem, remove, itemNotes, isFindable]
+    [isInitialItem, item, itemClick, pullItem, remove, itemNotes, isFindable],
   );
 
+  const missingSocketsMessage =
+    item.missingSockets === 'missing'
+      ? tl('MovePopup.MissingSockets')
+      : tl('MovePopup.LoadingSockets');
+
   return (
-    <div className="compare-item">
+    <div className={styles.compareItem}>
       {itemHeader}
       {stats.map((stat) => (
         <CompareStat
@@ -107,31 +112,27 @@ export default memo(function CompareItem({
         />
       ))}
       {isD1Item(item) && item.talentGrid && <ItemTalentGrid item={item} perksOnly={true} />}
-      {item.missingSockets && (
-        <div className="item-details warning">{t('MovePopup.MissingSockets')}</div>
+      {item.missingSockets && isInitialItem && (
+        <div className="item-details warning">{t(missingSocketsMessage)}</div>
       )}
-      {item.sockets && <ItemSockets item={item} minimal={true} onPlugClicked={onPlugClicked} />}
+      {item.sockets && <ItemSockets item={item} minimal onPlugClicked={onPlugClicked} />}
     </div>
   );
 });
 
 function VendorItemWarning({ item }: { item: DimItem }) {
   const defs = useD2Definitions()!;
+  const replacer = useDynamicStringReplacer(item.owner);
   return item.vendor ? (
     <PressTip
       elementType="span"
       tooltip={() => {
-        const vendorName = defs.Vendor.get(item.vendor!.vendorHash).displayProperties.name;
-        return (
-          <>
-            {t('Compare.IsVendorItem')}
-            <br />
-            {t('Compare.SoldBy', { vendorName })}
-          </>
-        );
+        const vendorName =
+          replacer(defs.Vendor.get(item.vendor!.vendorHash)?.displayProperties?.name) || '--';
+        return <>{t('Compare.IsVendorItem', { vendorName })}</>;
       }}
     >
-      <ActionButton onClick={_.noop} disabled title={t('Hotkey.Pull')}>
+      <ActionButton onClick={noop} disabled>
         <AppIcon icon={shoppingCart} />
       </ActionButton>
     </PressTip>

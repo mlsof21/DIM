@@ -1,59 +1,25 @@
-import BungieImage from 'app/dim-ui/BungieImage';
+import { EnergyIncrementsWithPresstip } from 'app/dim-ui/EnergyIncrements';
 import { t } from 'app/i18next-t';
-import { showItemPicker } from 'app/item-picker/item-picker';
+import { useItemPicker } from 'app/item-picker/item-picker';
 import Sockets from 'app/loadout/loadout-ui/Sockets';
-import { useD2Definitions } from 'app/manifest/selectors';
 import { MAX_ARMOR_ENERGY_CAPACITY } from 'app/search/d2-known-values';
 import { AppIcon, faRandom, lockIcon } from 'app/shell/icons';
-import { DestinyEnergyType } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
 import { PlugCategoryHashes } from 'data/d2/generated-enums';
-import _ from 'lodash';
-import React, { Dispatch } from 'react';
+import { Dispatch } from 'react';
 import { DimItem, PluggableInventoryItemDefinition } from '../../inventory/item-types';
-import { LoadoutBuilderAction } from '../loadout-builder-reducer';
 import LoadoutBuilderItem from '../LoadoutBuilderItem';
+import { LoadoutBuilderAction } from '../loadout-builder-reducer';
 import styles from './GeneratedSetItem.m.scss';
 
 /**
  * Shows how we recommend the energy of this armor be changed in order to fit its mods.
  */
-function EnergySwap({
-  item,
-  assignedMods,
-}: {
-  item: DimItem;
-  assignedMods?: PluggableInventoryItemDefinition[];
-}) {
-  const defs = useD2Definitions()!;
+export function EnergySwap({ energy }: { energy: { energyCapacity: number; energyUsed: number } }) {
+  const armorEnergyCapacity = energy.energyCapacity;
+  const resultingEnergyCapacity = Math.max(energy.energyUsed, armorEnergyCapacity);
 
-  const armorEnergyCapacity = item.energy?.energyCapacity || 0;
-  const armorEnergy = defs.EnergyType.get(item.energy!.energyTypeHash);
-
-  const modCost = _.sumBy(assignedMods, (mod) => mod.plug.energyCost?.energyCost || 0);
-  const modEnergyHashNotAny = assignedMods?.find(
-    (mod) =>
-      mod.plug.energyCost &&
-      mod.plug.energyCost.energyCost > 0 &&
-      mod.plug.energyCost.energyType !== DestinyEnergyType.Any
-  )?.plug.energyCost?.energyTypeHash;
-  const modEnergy = (modEnergyHashNotAny && defs.EnergyType.get(modEnergyHashNotAny)) || null;
-
-  // The armor energy type and capacity needed for the mods
-  const resultingEnergy = modEnergy ?? armorEnergy;
-  let resultingEnergyCapacity = armorEnergyCapacity;
-
-  // If there is a mod energy type and it's different to the armor energy type
-  // we always use the mod cost as we are swapping energy types on the armor
-  if (modEnergyHashNotAny && modEnergyHashNotAny !== armorEnergy.hash) {
-    resultingEnergyCapacity = modCost;
-  } else {
-    // Otherwise we just take the max of armor capacity and mod cost
-    resultingEnergyCapacity = Math.max(armorEnergyCapacity, modCost);
-  }
-
-  const noEnergyChange =
-    resultingEnergyCapacity === armorEnergyCapacity && resultingEnergy === armorEnergy;
+  const noEnergyChange = resultingEnergyCapacity === armorEnergyCapacity;
 
   return (
     <div className={clsx(styles.energySwapContainer, { [styles.energyHidden]: noEnergyChange })}>
@@ -65,7 +31,6 @@ function EnergySwap({
         >
           {armorEnergyCapacity}
         </div>
-        <BungieImage className={styles.energyIcon} src={armorEnergy.displayProperties.icon} />
       </div>
       <div className={styles.arrow}>➜</div>
       <div className={styles.energyValue}>
@@ -76,7 +41,6 @@ function EnergySwap({
         >
           {resultingEnergyCapacity}
         </div>
-        <BungieImage className={styles.energyIcon} src={resultingEnergy.displayProperties.icon} />
       </div>
     </div>
   );
@@ -91,35 +55,40 @@ export default function GeneratedSetItem({
   pinned,
   itemOptions,
   assignedMods,
-  showEnergyChanges,
+  autoStatMods,
+  automaticallyPickedMods,
+  energy,
   lbDispatch,
 }: {
   item: DimItem;
   pinned: boolean;
   itemOptions: DimItem[];
   assignedMods?: PluggableInventoryItemDefinition[];
-  showEnergyChanges: boolean;
+  autoStatMods: boolean;
+  automaticallyPickedMods?: number[];
+  energy: { energyCapacity: number; energyUsed: number };
   lbDispatch: Dispatch<LoadoutBuilderAction>;
 }) {
   const pinItem = (item: DimItem) => lbDispatch({ type: 'pinItem', item });
   const unpinItem = () => lbDispatch({ type: 'unpinItem', item });
+  const showItemPicker = useItemPicker();
 
   const chooseReplacement = async () => {
     const ids = new Set(itemOptions.map((i) => i.id));
 
-    try {
-      const { item } = await showItemPicker({
-        prompt: t('LoadoutBuilder.ChooseAlternateTitle'),
-        filterItems: (item: DimItem) => ids.has(item.id),
-      });
+    const item = await showItemPicker({
+      prompt: t('LoadoutBuilder.ChooseAlternateTitle'),
+      filterItems: (item: DimItem) => ids.has(item.id),
+    });
 
+    if (item) {
       pinItem(item);
-    } catch (e) {}
+    }
   };
 
   const onSocketClick = (
     plugDef: PluggableInventoryItemDefinition,
-    plugCategoryHashWhitelist?: number[]
+    plugCategoryHashWhitelist?: number[],
   ) => {
     const { plugCategoryHash } = plugDef.plug;
 
@@ -130,7 +99,10 @@ export default function GeneratedSetItem({
       if (item.isExotic) {
         lbDispatch({ type: 'lockExotic', lockedExoticHash: item.hash });
       }
-    } else {
+    } else if (
+      plugCategoryHash !== PlugCategoryHashes.EnhancementsArtifice &&
+      (!autoStatMods || plugCategoryHash !== PlugCategoryHashes.EnhancementsV2General)
+    ) {
       lbDispatch({
         type: 'openModPicker',
         plugCategoryHashWhitelist,
@@ -140,10 +112,10 @@ export default function GeneratedSetItem({
 
   return (
     <div>
-      {showEnergyChanges && <EnergySwap item={item} assignedMods={assignedMods} />}
       <div className={styles.item}>
         <div className={styles.swapButtonContainer}>
           <LoadoutBuilderItem item={item} onShiftClick={() => pinItem(item)} />
+          <EnergyIncrementsWithPresstip wrapperClass={styles.energyMeter} energy={energy} />
           {itemOptions.length > 1 ? (
             <button
               type="button"
@@ -166,14 +138,13 @@ export default function GeneratedSetItem({
             )
           )}
         </div>
-        <div className={styles.lockedSockets}>
-          <Sockets
-            item={item}
-            lockedMods={assignedMods}
-            onSocketClick={onSocketClick}
-            size="small"
-          />
-        </div>
+        <Sockets
+          item={item}
+          lockedMods={assignedMods}
+          automaticallyPickedMods={automaticallyPickedMods}
+          onSocketClick={onSocketClick}
+          size="small"
+        />
       </div>
     </div>
   );

@@ -1,135 +1,31 @@
-import { ItemHashTag } from '@destinyitemmanager/dim-api-types';
-import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
-import { customStatsSelector, languageSelector } from 'app/dim-api/selectors';
-import { d2ManifestSelector } from 'app/manifest/selectors';
-import { Settings } from 'app/settings/initial-settings';
+import { filterMap } from 'app/utils/collections';
 import { errorLog } from 'app/utils/log';
-import { WishListRoll } from 'app/wishlists/types';
-import _ from 'lodash';
-import { createSelector } from 'reselect';
-import { ItemInfos } from '../inventory/dim-item-info';
-import { DimItem } from '../inventory/item-types';
-import {
-  allItemsSelector,
-  currentStoreSelector,
-  displayableBucketHashesSelector,
-  itemHashTagsSelector,
-  itemInfosSelector,
-  newItemsSelector,
-  sortedStoresSelector,
-} from '../inventory/selectors';
-import { DimStore } from '../inventory/store-types';
-import { LoadoutsByItem, loadoutsByItemSelector } from '../loadout-drawer/selectors';
-import { querySelector } from '../shell/selectors';
-import { wishListFunctionSelector, wishListsByHashSelector } from '../wishlists/selectors';
-import { InventoryWishListRoll } from '../wishlists/wishlists';
-import { FilterContext, ItemFilter } from './filter-types';
-import { parseQuery, QueryAST } from './query-parser';
-import { SearchConfig, searchConfigSelector } from './search-config';
-import { parseAndValidateQuery } from './search-utils';
+import { stubTrue } from 'lodash';
+import { FilterDefinition, ItemFilter, canonicalFilterFormats } from './filter-types';
+import { QueryAST, canonicalizeQuery, parseQuery } from './query-parser';
+import { FiltersMap, SearchConfig } from './search-config';
 
-//
-// Selectors
-//
-
-/**
- * A selector for the search config for a particular destiny version. This must
- * depend on every bit of data in FilterContext so that we regenerate the filter
- * function whenever any of them changes.
- */
-export const filterFactorySelector = createSelector(
-  searchConfigSelector,
-  sortedStoresSelector,
-  allItemsSelector,
-  currentStoreSelector,
-  loadoutsByItemSelector,
-  wishListFunctionSelector,
-  wishListsByHashSelector,
-  newItemsSelector,
-  itemInfosSelector,
-  itemHashTagsSelector,
-  languageSelector,
-  customStatsSelector,
-  d2ManifestSelector,
-  makeSearchFilterFactory
-);
-
-/** A selector for a function for searching items, given the current search query. */
-export const searchFilterSelector = createSelector(
-  querySelector,
-  filterFactorySelector,
-  (query, filterFactory) => filterFactory(query)
-);
-
-/** A selector for all items filtered by whatever's currently in the search box. */
-export const filteredItemsSelector = createSelector(
-  allItemsSelector,
-  searchFilterSelector,
-  displayableBucketHashesSelector,
-  (allItems, searchFilter, displayableBuckets) =>
-    allItems.filter((i) => displayableBuckets.has(i.location.hash) && searchFilter(i))
-);
-
-/** A selector for a function for validating a query. */
-export const validateQuerySelector = createSelector(
-  searchConfigSelector,
-  (searchConfig) => (query: string) => parseAndValidateQuery(query, searchConfig)
-);
-
-/** Whether the current search query is valid. */
-export const queryValidSelector = createSelector(
-  querySelector,
-  validateQuerySelector,
-  (query, validateQuery) => validateQuery(query).valid
-);
-
-function makeSearchFilterFactory(
-  { isFilters, kvFilters }: SearchConfig,
-  stores: DimStore[],
-  allItems: DimItem[],
-  currentStore: DimStore,
-  loadoutsByItem: LoadoutsByItem,
-  wishListFunction: (item: DimItem) => InventoryWishListRoll | undefined,
-  wishListsByHash: _.Dictionary<WishListRoll[]>,
-  newItems: Set<string>,
-  itemInfos: ItemInfos,
-  itemHashTags: {
-    [itemHash: string]: ItemHashTag;
-  },
-  language: string,
-  customStats: Settings['customTotalStatsByClass'],
-  d2Definitions: D2ManifestDefinitions
+/** Build a function that can take query text and return a filter function from it. */
+export function makeSearchFilterFactory<I, FilterCtx, SuggestionsCtx>(
+  { filtersMap: { isFilters, kvFilters } }: SearchConfig<I, FilterCtx, SuggestionsCtx>,
+  filterContext: FilterCtx,
 ) {
-  const filterContext: FilterContext = {
-    stores,
-    allItems,
-    currentStore,
-    loadoutsByItem,
-    wishListFunction,
-    newItems,
-    itemInfos,
-    itemHashTags,
-    language,
-    customStats,
-    wishListsByHash,
-    d2Definitions,
-  };
-
-  return (query: string): ItemFilter => {
+  return (query: string): ItemFilter<I> => {
     query = query.trim().toLowerCase();
     if (!query.length) {
       // By default, show anything that doesn't have the archive tag
-      return _.stubTrue;
+      return stubTrue;
     }
 
     const parsedQuery = parseQuery(query);
 
     // Transform our query syntax tree into a filter function by recursion.
-    const transformAST = (ast: QueryAST): ItemFilter | undefined => {
+    const transformAST = (ast: QueryAST): ItemFilter<I> | undefined => {
       switch (ast.op) {
         case 'and': {
-          const fns = _.compact(ast.operands.map(transformAST));
-          return fns.length
+          const fns = filterMap(ast.operands, transformAST);
+          // Propagate filter errors
+          return fns.length === ast.operands.length
             ? (item) => {
                 for (const fn of fns) {
                   if (!fn(item)) {
@@ -141,8 +37,9 @@ function makeSearchFilterFactory(
             : undefined;
         }
         case 'or': {
-          const fns = _.compact(ast.operands.map(transformAST));
-          return fns.length
+          const fns = filterMap(ast.operands, transformAST);
+          // Propagate filter errors
+          return fns.length === ast.operands.length
             ? (item) => {
                 for (const fn of fns) {
                   if (fn(item)) {
@@ -161,28 +58,250 @@ function makeSearchFilterFactory(
           const filterName = ast.type;
           const filterValue = ast.args;
 
-          // "is:" filters are slightly special cased
-          const filterDef = filterName === 'is' ? isFilters[filterValue] : kvFilters[filterName];
-
-          if (filterDef) {
-            // Each filter knows how to generate a standalone item filter function
-            try {
-              return filterDef.filter({ filterValue, ...filterContext });
-            } catch (e) {
-              // TODO: mark invalid - fill out what didn't make sense and where it was in the string
-              errorLog('search', 'Invalid query term', filterName, filterValue, e);
-              return undefined;
+          if (filterName === 'is') {
+            // "is:" filters are slightly special cased
+            const filterDef = isFilters[filterValue];
+            if (filterDef) {
+              try {
+                return filterDef.filter({ lhs: filterName, filterValue, ...filterContext });
+              } catch (e) {
+                // An `is` filter really shouldn't throw an error on filter construction...
+                errorLog(
+                  'search',
+                  'internal error: filter construction threw exception',
+                  filterName,
+                  filterValue,
+                  e,
+                );
+              }
             }
+            return undefined;
+          } else {
+            const filterDef = kvFilters[filterName];
+            const matchedFilter =
+              filterDef && matchFilter(filterDef, filterName, filterValue, filterContext);
+            if (matchedFilter) {
+              try {
+                return matchedFilter(filterContext);
+              } catch (e) {
+                // If this happens, a filter declares more syntax valid than it actually accepts, which
+                // is a bug in the filter declaration.
+                errorLog(
+                  'search',
+                  'internal error: filter construction threw exception',
+                  filterName,
+                  filterValue,
+                  e,
+                );
+              }
+            }
+            return undefined;
           }
-
-          // TODO: mark invalid - fill out what didn't make sense and where it was in the string
-          return undefined;
         }
         case 'noop':
           return undefined;
       }
     };
 
-    return transformAST(parsedQuery) ?? (() => true);
+    // If our filter has any invalid parts, the search filter should match no items
+    return transformAST(parsedQuery) ?? (() => false);
   };
+}
+
+/** Matches a non-`is` filter syntax and returns a way to actually create the matched filter function. */
+function matchFilter<I, FilterCtx, SuggestionsCtx>(
+  filterDef: FilterDefinition<I, FilterCtx, SuggestionsCtx>,
+  lhs: string,
+  filterValue: string,
+  currentFilterContext?: FilterCtx,
+): ((args: FilterCtx) => ItemFilter<I>) | undefined {
+  for (const format of canonicalFilterFormats(filterDef.format)) {
+    switch (format) {
+      case 'simple': {
+        break;
+      }
+      case 'query': {
+        if (filterDef.suggestions!.includes(filterValue)) {
+          return (filterContext) =>
+            filterDef.filter({
+              lhs,
+              filterValue,
+              ...filterContext,
+            });
+        } else {
+          break;
+        }
+      }
+      case 'freeform': {
+        return (filterContext) => filterDef.filter({ lhs, filterValue, ...filterContext });
+      }
+      case 'range': {
+        try {
+          const compare = rangeStringToComparator(filterValue, filterDef.overload);
+          return (filterContext) =>
+            filterDef.filter({
+              lhs,
+              filterValue: '',
+              compare,
+              ...filterContext,
+            });
+        } catch {
+          break;
+        }
+      }
+      case 'stat': {
+        const [stat, rangeString] = filterValue.split(':', 2);
+        try {
+          const compare = rangeStringToComparator(rangeString, filterDef.overload);
+          const validator = filterDef.validateStat?.(currentFilterContext);
+          if (!validator || validator(stat)) {
+            return (filterContext) =>
+              filterDef.filter({
+                lhs,
+                filterValue: stat,
+                compare,
+                ...filterContext,
+              });
+          } else {
+            break;
+          }
+        } catch {
+          break;
+        }
+      }
+      case 'custom':
+        break;
+    }
+  }
+}
+
+const rangeStringRegex = /^([<=>]{0,2})(\d+(?:\.\d+)?)$/;
+const overloadedRangeStringRegex = /^([<=>]{0,2})(\w+)$/;
+
+/**
+ * This turns a string like "<=2" into a function like (x)=>x <= 2.
+ * The produced function returns false if it was fed undefined.
+ */
+export function rangeStringToComparator(
+  rangeString?: string,
+  overloads?: { [key: string]: number },
+) {
+  if (!rangeString) {
+    throw new Error('Missing range comparison');
+  }
+
+  const [operator, comparisonValue] = extractOpAndValue(rangeString, overloads);
+
+  switch (operator) {
+    case '=':
+    case '':
+      return (compare: number | undefined) => compare !== undefined && compare === comparisonValue;
+    case '<':
+      return (compare: number | undefined) => compare !== undefined && compare < comparisonValue;
+    case '<=':
+      return (compare: number | undefined) => compare !== undefined && compare <= comparisonValue;
+    case '>':
+      return (compare: number | undefined) => compare !== undefined && compare > comparisonValue;
+    case '>=':
+      return (compare: number | undefined) => compare !== undefined && compare >= comparisonValue;
+  }
+  throw new Error(`Unknown range operator ${operator}`);
+}
+
+function extractOpAndValue(rangeString: string, overloads?: { [key: string]: number }) {
+  const matchedOverloadString = rangeString.match(overloadedRangeStringRegex);
+  if (matchedOverloadString && overloads && matchedOverloadString[2] in overloads) {
+    return [matchedOverloadString[1], overloads[matchedOverloadString[2]]] as const;
+  }
+
+  const matchedRangeString = rangeString.match(rangeStringRegex);
+  if (matchedRangeString) {
+    return [matchedRangeString[1], parseFloat(matchedRangeString[2])] as const;
+  }
+
+  throw new Error("Doesn't match our range comparison syntax, or invalid overload");
+}
+
+/**
+ * Given a query and some configuration, parse the query and see if it's valid. This includes checking that the filters actually exist in the filtersMap.
+ */
+export function parseAndValidateQuery<I, FilterCtx, SuggestionsCtx>(
+  query: string,
+  filtersMap: FiltersMap<I, FilterCtx, SuggestionsCtx>,
+  filterContext?: FilterCtx,
+): {
+  /** Is the query valid at all? */
+  valid: boolean;
+  /** Can the user save this query? */
+  saveable: boolean;
+  /** Should we automatically save this in search history? */
+  saveInHistory: boolean;
+  /** The canonicalized version of the query */
+  canonical: string;
+} {
+  let valid = true;
+  let saveable = true;
+  let saveInHistory = true;
+  let canonical = query;
+  try {
+    const ast = parseQuery(query);
+    if (!validateQuery(ast, filtersMap, filterContext)) {
+      valid = false;
+    } else {
+      if (ast.op === 'noop' || (ast.op === 'filter' && ast.type === 'keyword')) {
+        // don't save "trivial" single-keyword filters
+        saveInHistory = false;
+      }
+      // Some sites have people save big lists of item IDs. Even if these aren't too long, don't save them automatically
+      if (ast.op === 'or' && ast.operands.every((op) => op.op === 'filter' && op.type === 'id')) {
+        saveInHistory = false;
+      }
+      canonical = canonicalizeQuery(ast);
+      saveable = canonical.length <= 2048;
+    }
+  } catch (e) {
+    valid = false;
+  }
+  return {
+    valid,
+    saveable: valid && saveable,
+    saveInHistory: valid && saveable && saveInHistory,
+    canonical,
+  };
+}
+
+/**
+ * Return whether the query is completely valid - syntactically, and where every term matches a known filter
+ * and every filter RHS matches the declared format and options for the filter syntax.
+ */
+function validateQuery<I, FilterCtx, SuggestionsCtx>(
+  query: QueryAST,
+  filtersMap: FiltersMap<I, FilterCtx, SuggestionsCtx>,
+  filterContext?: FilterCtx,
+): boolean {
+  if (query.error) {
+    return false;
+  }
+  switch (query.op) {
+    case 'filter': {
+      const filterName = query.type;
+      const filterValue = query.args;
+
+      // "is:" filters are slightly special cased
+      if (filterName === 'is') {
+        return Boolean(filtersMap.isFilters[filterValue]);
+      } else {
+        const filterDef = filtersMap.kvFilters[filterName];
+        return Boolean(filterDef && matchFilter(filterDef, filterName, filterValue, filterContext));
+      }
+    }
+    case 'not':
+      return validateQuery(query.operand, filtersMap, filterContext);
+    case 'and':
+    case 'or': {
+      return query.operands.every((q) => validateQuery(q, filtersMap, filterContext));
+    }
+    case 'noop':
+      return true;
+  }
 }

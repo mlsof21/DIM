@@ -3,23 +3,23 @@ import { addCompareItem } from 'app/compare/actions';
 import BungieImage, { bungieNetPath } from 'app/dim-ui/BungieImage';
 import { DestinyTooltipText } from 'app/dim-ui/DestinyTooltipText';
 import ElementIcon from 'app/dim-ui/ElementIcon';
-import RichDestinyText from 'app/dim-ui/RichDestinyText';
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import { t } from 'app/i18next-t';
 import ItemIcon from 'app/inventory/ItemIcon';
-import { allItemsSelector, bucketsSelector } from 'app/inventory/selectors';
+import { allItemsSelector, createItemContextSelector } from 'app/inventory/selectors';
 import { makeFakeItem } from 'app/inventory/store/d2-item-factory';
 import {
-  applySocketOverrides,
   SocketOverrides,
+  applySocketOverrides,
   useSocketOverrides,
 } from 'app/inventory/store/override-sockets';
 import { getEvent, getSeason } from 'app/inventory/store/season';
 import EmblemPreview from 'app/item-popup/EmblemPreview';
-import { hideItemPopup } from 'app/item-popup/item-popup';
 import { AmmoIcon, ItemTypeName } from 'app/item-popup/ItemPopupHeader';
 import ItemSockets from 'app/item-popup/ItemSockets';
 import ItemStats from 'app/item-popup/ItemStats';
 import MetricCategories from 'app/item-popup/MetricCategories';
+import { hideItemPopup } from 'app/item-popup/item-popup';
 import { useD2Definitions } from 'app/manifest/selectors';
 import Objective from 'app/progress/Objective';
 import { Reward } from 'app/progress/Reward';
@@ -27,7 +27,8 @@ import { AppIcon, compareIcon } from 'app/shell/icons';
 import { useIsPhonePortrait } from 'app/shell/selectors';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { getItemYear } from 'app/utils/item-utils';
-import { D2EventInfo } from 'data/d2/d2-event-info';
+import clsx from 'clsx';
+import { D2EventInfo } from 'data/d2/d2-event-info-v2';
 import { ItemCategoryHashes } from 'data/d2/generated-enums';
 import { useSelector } from 'react-redux';
 import AllWishlistRolls from './AllWishlistRolls';
@@ -51,14 +52,14 @@ export default function Armory({
 }) {
   const dispatch = useThunkDispatch();
   const defs = useD2Definitions()!;
-  const buckets = useSelector(bucketsSelector)!;
   const allItems = useSelector(allItemsSelector);
   const isPhonePortrait = useIsPhonePortrait();
   const [socketOverrides, onPlugClicked] = useSocketOverrides();
+  const itemCreationContext = useSelector(createItemContextSelector);
 
   const itemDef = defs.InventoryItem.get(itemHash);
 
-  const itemWithoutSockets = makeFakeItem(defs, buckets, undefined, itemHash);
+  const itemWithoutSockets = makeFakeItem(itemCreationContext, itemHash, { allowWishList: true });
 
   if (!itemWithoutSockets) {
     return (
@@ -68,12 +69,12 @@ export default function Armory({
     );
   }
 
-  // We apply socket overrides *twice* - once to set the original sockets, then to apply the user's chosen overrides
-  const item = applySocketOverrides(
-    defs,
-    applySocketOverrides(defs, itemWithoutSockets, realItemSockets),
-    socketOverrides
-  );
+  const item = applySocketOverrides(itemCreationContext, itemWithoutSockets, {
+    // Start with the item's current sockets
+    ...realItemSockets,
+    // Then apply whatever the user chose in the Armory UI
+    ...socketOverrides,
+  });
 
   const storeItems = allItems.filter((i) => i.hash === itemHash);
 
@@ -94,12 +95,12 @@ export default function Armory({
 
   return (
     <div
-      className={styles.armory}
+      className={clsx(styles.armory, 'armory')}
       style={
         screenshot && !isPhonePortrait
           ? {
               backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.75) 0px, rgba(0,0,0,0) 200px), linear-gradient(180deg, rgba(0,0,0,0) 400px, #0b0c0f 500px), url("${bungieNetPath(
-                screenshot
+                screenshot,
               )}")`,
             }
           : undefined
@@ -119,11 +120,11 @@ export default function Armory({
             )}
             {item.destinyVersion === 2 && item.ammoType > 0 && <AmmoIcon type={item.ammoType} />}
             <ItemTypeName item={item} />
-            {item.pursuit?.questStepNum && (
+            {item.pursuit?.questLine && (
               <div>
                 {t('MovePopup.Subtitle.QuestProgress', {
-                  questStepNum: item.pursuit.questStepNum,
-                  questStepsTotal: item.pursuit.questStepsTotal,
+                  questStepNum: item.pursuit.questLine.questStepNum,
+                  questStepsTotal: item.pursuit.questLine.questStepsTotal ?? '?',
                 })}
               </div>
             )}
@@ -133,8 +134,11 @@ export default function Armory({
                   <BungieImage height={15} width={15} src={season.displayProperties.icon} />
                 )}{' '}
                 {season.displayProperties.name} (
-                {t('Armory.Season', { season: season.seasonNumber, year: getItemYear(item) })})
-                {event && <span> - {D2EventInfo[getEvent(item)].name}</span>}
+                {t('Armory.Season', {
+                  season: season.seasonNumber,
+                  year: getItemYear(item) ?? '?',
+                })}
+                ){Boolean(event) && <span> - {D2EventInfo[getEvent(item)!].name}</span>}
               </div>
             )}
           </div>
@@ -158,13 +162,13 @@ export default function Armory({
         </div>
       )}
 
-      {defs.isDestiny2() && item.itemCategoryHashes.includes(ItemCategoryHashes.Emblems) && (
+      {defs.isDestiny2 && item.itemCategoryHashes.includes(ItemCategoryHashes.Emblems) && (
         <div className="item-details">
           <EmblemPreview item={item} />
         </div>
       )}
 
-      {defs.isDestiny2() && item.availableMetricCategoryNodeHashes && (
+      {defs.isDestiny2 && item.availableMetricCategoryNodeHashes && (
         <div className="item-details">
           <MetricCategories
             availableMetricCategoryNodeHashes={item.availableMetricCategoryNodeHashes}
@@ -192,7 +196,7 @@ export default function Armory({
               ))}
             </div>
           )}
-          {defs.isDestiny2() && item.pursuit.rewards.length !== 0 && (
+          {defs.isDestiny2 && item.pursuit.rewards.length !== 0 && (
             <div className={styles.section}>
               <div>{t('MovePopup.Rewards')}</div>
               {item.pursuit.rewards.map((reward) => (
@@ -200,15 +204,15 @@ export default function Armory({
               ))}
             </div>
           )}
-          {item.pursuit?.questLineDescription && (
+          {item.pursuit?.questLine?.description && (
             <p>
-              <RichDestinyText text={item.pursuit.questLineDescription} ownerId={item.owner} />
+              <RichDestinyText text={item.pursuit.questLine.description} ownerId={item.owner} />
             </p>
           )}
           {itemDef.setData?.itemList && (
             <ol>
               {itemDef.setData.itemList.map((h) => {
-                const stepItem = makeFakeItem(defs, buckets, undefined, h.itemHash);
+                const stepItem = makeFakeItem(itemCreationContext, h.itemHash);
                 return (
                   stepItem && (
                     <li
@@ -225,7 +229,7 @@ export default function Armory({
         </>
       )}
 
-      <WishListEntry item={item} />
+      {!isPhonePortrait && item.wishListEnabled && <WishListEntry item={item} />}
 
       {storeItems.length > 0 && (
         <>
@@ -247,7 +251,9 @@ export default function Armory({
           <ItemGrid items={storeItems} noLink />
         </>
       )}
-      <AllWishlistRolls item={item} realAvailablePlugHashes={realAvailablePlugHashes} />
+      {item.wishListEnabled && (
+        <AllWishlistRolls item={item} realAvailablePlugHashes={realAvailablePlugHashes} />
+      )}
     </div>
   );
 }

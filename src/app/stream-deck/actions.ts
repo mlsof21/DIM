@@ -1,5 +1,11 @@
-import { StreamDeckSelectionType } from 'app/stream-deck/interfaces';
 import { createAction } from 'typesafe-actions';
+
+export type SelectionType = 'item' | 'loadout' | 'postmaster' | undefined;
+
+export interface StreamDeckAuth {
+  instance: string;
+  token: string;
+}
 
 /**
  * Change WebSocket status to connected (true)
@@ -12,14 +18,16 @@ export const streamDeckConnected = createAction('stream-deck/CONNECTED')();
 export const streamDeckDisconnected = createAction('stream-deck/DISCONNECTED')();
 
 /**
- * Trigger a notification popup asking the user to select an item/loadout
+ * Update the selection type
  */
-export const streamDeckWaitSelection = createAction(
-  'shell/TRIGGER_SELECTION',
-  (selectionType: StreamDeckSelectionType) => selectionType
-)();
+export const streamDeckSelection = createAction('stream-deck/SELECTION')<SelectionType>();
 
 /**
- * Cancel selection notification and stop related components behaviour
+ * Update the authorization
  */
-export const streamDeckClearSelection = createAction('stream-deck/CANCEL_SELECTION')();
+export const streamDeckAuthorization = createAction('stream-deck/AUTHORIZATION')<StreamDeckAuth>();
+
+/**
+ * Update the plugin status
+ */
+export const streamDeckEnabled = createAction('stream-deck/ENABLED')<boolean>();

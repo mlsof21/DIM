@@ -16,7 +16,7 @@ export default function ClosableContainer({
   children: React.ReactNode;
   className?: string;
   showCloseIconOnHover?: boolean;
-  onClose?(e: React.MouseEvent): void;
+  onClose?: (e: React.MouseEvent) => void;
 }) {
   return (
     <div
@@ -26,7 +26,7 @@ export default function ClosableContainer({
     >
       {children}
       {Boolean(onClose) && (
-        <div className={clsx(styles.close)} onClick={onClose} role="button" tabIndex={0} />
+        <div className={styles.close} onClick={onClose} role="button" tabIndex={0} />
       )}
     </div>
   );

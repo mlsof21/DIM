@@ -14,7 +14,7 @@ interface StatNode<T> {
 /**
  * Result helper for distinguishing between different cases in the better stats helper
  */
-enum BetterStatsResult {
+const enum BetterStatsResult {
   // There exists a known set of stats with at least one higher stat than the input, and NO lower stats
   BETTER_STATS_EXIST = -1,
   // There exists a known set of stats with exactly the same stats as the input, but nothing better
@@ -89,7 +89,7 @@ export class StatsSet<T> {
 function betterStatsHelper<T>(
   nodes: StatNode<T>[],
   stats: number[],
-  statIndex: number
+  statIndex: number,
 ): BetterStatsResult {
   const stat = stats[statIndex];
   // Iterate all nodes in descending value until the value is lower than our stat
@@ -105,8 +105,8 @@ function betterStatsHelper<T>(
       return node.value > stat
         ? BetterStatsResult.BETTER_STATS_EXIST
         : node.value === stat
-        ? BetterStatsResult.SAME
-        : BetterStatsResult.HIGHER_STAT;
+          ? BetterStatsResult.SAME
+          : BetterStatsResult.HIGHER_STAT;
     }
 
     // Evaluate the subtree from this node

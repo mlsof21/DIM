@@ -18,37 +18,47 @@
 <string> ::= WORD | "\"" WORD {" " WORD} "\"" | "'" WORD {" " WORD} "'\"'"
 */
 
+import { convertToError } from 'app/utils/errors';
+
 /* **** Parser **** */
 
-/**
- * A tree of the parsed query. Boolean/unary operators have children (operands)that
- * describe their relationship.
- */
-export type QueryAST = (AndOp | OrOp | NotOp | FilterOp | NoOp) & {
+interface QueryASTCommon {
   error?: Error;
   comment?: string;
-};
+
+  /** The beginning index of the query string where this was found. */
+  startIndex: number;
+
+  /** The length of the portion of the query string that this operator consists of, including its sub-expressions/operands. */
+  length: number;
+}
+
+/**
+ * A tree of the parsed query. Boolean/unary operators have children (operands) that
+ * describe their relationship.
+ */
+export type QueryAST = AndOp | OrOp | NotOp | FilterOp | NoOp;
 
 /** If ALL of of the operands are true, this resolves to true. There may be any number of operands. */
-export interface AndOp {
+export interface AndOp extends QueryASTCommon {
   op: 'and';
   operands: QueryAST[];
 }
 
 /** If any of the operands is true, this resolves to true. There may be any number of operands. */
-export interface OrOp {
+export interface OrOp extends QueryASTCommon {
   op: 'or';
   operands: QueryAST[];
 }
 
 /** An operator which negates the result of its only operand. */
-export interface NotOp {
+export interface NotOp extends QueryASTCommon {
   op: 'not';
   operand: QueryAST;
 }
 
 /** This represents one of our filter function definitions, such as is:, season:, etc. */
-export interface FilterOp {
+export interface FilterOp extends QueryASTCommon {
   op: 'filter';
   /**
    * The name of the filter function, without any trailing :. The only weird case is
@@ -62,7 +72,7 @@ export interface FilterOp {
 }
 
 /** This is mostly for error cases and empty string */
-interface NoOp {
+export interface NoOp extends QueryASTCommon {
   op: 'noop';
 }
 
@@ -83,7 +93,10 @@ class PeekableGenerator<T> {
    */
   peek(): T | undefined {
     if (!this.next) {
-      this.next = this.gen.next().value;
+      const n = this.gen.next();
+      if (!n.done) {
+        this.next = n.value;
+      }
     }
     return this.next;
   }
@@ -97,7 +110,10 @@ class PeekableGenerator<T> {
       this.next = undefined;
       return ret;
     }
-    return this.gen.next().value as T | undefined;
+    const n = this.gen.next();
+    if (!n.done) {
+      return n.value;
+    }
   }
 }
 
@@ -145,9 +161,9 @@ export function parseQuery(query: string): QueryAST {
       throw new Error('expected an atom');
     }
 
-    switch (token[0]) {
+    switch (token.type) {
       case 'filter': {
-        const keyword = token[1];
+        const keyword = token.keyword;
         if (keyword === 'not') {
           // `not:` a synonym for `-is:`. We could fix this up in filter execution but I chose to normalize it here.
           return {
@@ -155,41 +171,57 @@ export function parseQuery(query: string): QueryAST {
             operand: {
               op: 'filter',
               type: 'is',
-              args: token[2],
+              args: token.args,
+              startIndex: token.startIndex,
+              length: token.length,
             },
+            startIndex: token.startIndex,
+            length: token.length,
           };
         } else {
           return {
             op: 'filter',
             type: keyword,
-            args: token[2],
+            args: token.args,
+            startIndex: token.startIndex,
+            length: token.length,
           };
         }
       }
       case 'not': {
+        // The operand should always be an atom
+        const operand = parseAtom(tokens);
         return {
           op: 'not',
-          // The operand should always be an atom
-          operand: parseAtom(tokens),
+          operand,
+          startIndex: token.startIndex,
+          length: token.length + operand.length,
         };
       }
       case '(': {
         const result = parse(tokens);
-        if (tokens.peek()?.[0] === ')') {
-          tokens.pop();
+        result.length += result.startIndex - token.startIndex;
+        result.startIndex = token.startIndex;
+        if (tokens.peek()?.type === ')') {
+          const closeParen = tokens.pop();
+          result.length += closeParen!.length;
         }
         return result;
       }
       case 'comment': {
-        const comment = token[1];
+        const comment = token.content;
         const next = parseAtom(tokens);
         return {
           ...next,
           comment: comment,
+          startIndex: next.startIndex,
+          length: next.length,
         };
       }
       default:
-        throw new Error('Unexpected token type, looking for an atom: ' + token + ', ' + query);
+        throw new Error(
+          `Unexpected token type, looking for an atom: ${JSON.stringify(token)}, ${query}`,
+        );
     }
   }
 
@@ -198,19 +230,19 @@ export function parseQuery(query: string): QueryAST {
    * of operators that will be included in this portion of the parse.
    */
   function parse(tokens: PeekableGenerator<Token>, minPrecedence = 1): QueryAST {
-    let ast: QueryAST = { op: 'noop' };
+    let ast: QueryAST = { op: 'noop', startIndex: 0, length: 0 };
 
     try {
       ast = parseAtom(tokens);
 
       let token: Token | undefined;
       while ((token = tokens.peek())) {
-        if (token[0] === ')') {
+        if (token.type === ')') {
           break;
         }
-        const operator = operators[token[0] as keyof typeof operators];
+        const operator = operators[token.type as keyof typeof operators];
         if (!operator) {
-          throw new Error('Expected an operator, got ' + token);
+          throw new Error(`Expected an operator, got ${JSON.stringify(token)}`);
         } else if (operator.precedence < minPrecedence) {
           break;
         }
@@ -223,12 +255,15 @@ export function parseQuery(query: string): QueryAST {
         // This logic tries to combine them where possible.
         if (isSameOp(operator.op, ast)) {
           ast.operands.push(rhs);
+          ast.length += rhs.length;
         } else {
           const title = ast.comment;
           delete ast.comment;
           ast = {
             op: operator.op,
             operands: isSameOp(operator.op, rhs) ? [ast, ...rhs.operands] : [ast, rhs],
+            startIndex: Math.min(rhs.startIndex, ast.startIndex, token.startIndex),
+            length: ast.length + rhs.length + token.length,
           };
           if (title) {
             ast.comment = title;
@@ -236,7 +271,7 @@ export function parseQuery(query: string): QueryAST {
         }
       }
     } catch (e) {
-      ast.error = e;
+      ast.error = convertToError(e);
     }
 
     return ast;
@@ -245,10 +280,10 @@ export function parseQuery(query: string): QueryAST {
   const tokens = new PeekableGenerator(lexer(query));
   try {
     if (!tokens.peek()) {
-      return { op: 'noop' };
+      return { op: 'noop', startIndex: 0, length: 0 };
     }
   } catch (e) {
-    return { op: 'noop' };
+    return { op: 'noop', error: convertToError(e), startIndex: 0, length: 0 };
   }
   const ast = parse(tokens);
   return ast;
@@ -262,7 +297,11 @@ function isSameOp<T extends 'and' | 'or'>(binOp: T, op: QueryAST): op is AndOp |
 
 // Lexer token types
 type NoArgTokenType = '(' | ')' | 'not' | 'or' | 'and' | 'implicit_and';
-export type Token = [NoArgTokenType] | ['filter', string, string] | ['comment', string];
+export type Token = { startIndex: number; length: number; quoted?: boolean } & (
+  | { type: NoArgTokenType }
+  | { type: 'filter'; keyword: string; args: string }
+  | { type: 'comment'; content: string }
+);
 
 // Parens: `(` can be followed by whitespace, while `)` can be preceded by it
 const parens = /(\(\s*|\s*\))/y;
@@ -284,6 +323,27 @@ export function makeCommentString(text: string) {
   return `/* ${text} */`;
 }
 
+export class QueryLexerError extends Error {
+  // The index and length of the range within the query string where the error occurred
+  startIndex: number;
+  length: number;
+
+  constructor(message: string, startIndex: number, length: number) {
+    super(message);
+    this.startIndex = startIndex;
+    this.length = length;
+    this.name = 'QueryLexerError';
+  }
+}
+
+/** A special version of QueryLexerError for when quotes aren't closed. */
+export class QueryLexerOpenQuotesError extends QueryLexerError {
+  constructor(message: string, startIndex: number, length: number) {
+    super(message, startIndex, length);
+    this.name = 'QueryLexerError';
+  }
+}
+
 /**
  * The lexer yields a series of tokens representing the linear structure of the search query.
  * This throws an exception if it finds an invalid input.
@@ -292,7 +352,7 @@ export function makeCommentString(text: string) {
  * ["filter", "is", "blue"], ["implicit_and"], ["not"], ["filter", "is", "maxpower"]
  */
 export function* lexer(query: string): Generator<Token> {
-  query = query.trim().toLowerCase();
+  query = query.toLowerCase();
 
   // http://blog.tatedavies.com/2012/08/28/replace-microsoft-chars-in-javascript/
   query = query.replace(/[\u2018-\u201A]/g, "'");
@@ -347,13 +407,18 @@ export function* lexer(query: string): Generator<Token> {
       consume(char);
       // Handle character escapes e.g. \", \', \\
       if (char === '\\') {
+        const escapeStart = i;
         if (i < query.length) {
           const escaped = query[i];
           if (escaped === '"' || escaped === "'" || escaped === '\\') {
             str += escaped;
             consume(escaped);
           } else {
-            throw new Error('Unrecognized escape sequence \\' + escaped);
+            throw new QueryLexerError(
+              `Unrecognized escape sequence \\${escaped}`,
+              escapeStart,
+              i - escapeStart,
+            );
           }
         } else {
           str = str + char;
@@ -365,53 +430,105 @@ export function* lexer(query: string): Generator<Token> {
       }
     }
 
-    throw new Error('Unterminated quotes: |' + query.slice(initial) + '| ' + initial);
+    throw new QueryLexerOpenQuotesError(
+      `Unterminated quotes: |${query.slice(initial)}| ${initial}`,
+      initial,
+      i - initial,
+    );
   };
 
   while (i < query.length) {
     const char = query[i];
-    const startingIndex = i;
+    const startIndex = i;
 
     if ((match = extract(parens)) !== undefined) {
       // Start/end group
-      yield [match.trim() as NoArgTokenType];
+      yield { startIndex, length: i - startIndex, type: match.trim() as NoArgTokenType };
     } else if (char === '"' || char === "'") {
+      const quotedString = consumeString(char);
       // Quoted string
-      yield ['filter', 'keyword', consumeString(char)];
+      yield {
+        startIndex,
+        length: i - startIndex,
+        type: 'filter',
+        keyword: 'keyword',
+        args: quotedString,
+        quoted: true,
+      };
     } else if ((match = extract(negation)) !== undefined) {
       // minus sign is the same as "not"
-      yield ['not'];
+      yield { startIndex, length: i - startIndex, type: 'not' };
     } else if ((match = extract(booleanKeywords)) !== undefined) {
       // boolean keywords
-      yield [match.trim() as NoArgTokenType];
+      yield { startIndex, length: i - startIndex, type: match.trim() as NoArgTokenType };
     } else if ((match = extract(comment)) !== undefined) {
-      yield ['comment', match.trim()];
+      yield {
+        startIndex,
+        length: i - startIndex,
+        type: 'comment',
+        content: match.trim(),
+      };
     } else if ((match = extract(filterName)) !== undefined) {
       // Keyword searches - is:, stat:discipline:, etc
       const keyword = match.slice(0, match.length - 1);
       const nextChar = query[i];
 
       let args = '';
+      let quoted = false;
 
       if (nextChar === '"' || nextChar === "'") {
-        args = consumeString(nextChar);
+        try {
+          quoted = true;
+          args = consumeString(nextChar);
+        } catch (e) {
+          if (e instanceof QueryLexerOpenQuotesError) {
+            // Rethrow but include the filter prefix (e.g. name:) in the range
+            throw new QueryLexerOpenQuotesError(e.message, startIndex, e.length + match.length);
+          } else {
+            throw e;
+          }
+        }
       } else if ((match = extract(filterArgs)) !== undefined) {
         args = match;
       } else {
-        throw new Error('missing keyword arguments for ' + match);
+        throw new QueryLexerError(
+          `missing keyword arguments for ${keyword}`,
+          startIndex,
+          query.length - startIndex,
+        );
       }
 
-      yield ['filter', keyword, args];
+      yield {
+        startIndex,
+        length: i - startIndex,
+        type: 'filter',
+        keyword,
+        args,
+        quoted,
+      };
     } else if ((match = extract(bareWords)) !== undefined) {
       // bare words that aren't keywords are effectively "keyword" type filters
-      yield ['filter', 'keyword', match];
+      yield {
+        startIndex,
+        length: i - startIndex,
+        type: 'filter',
+        keyword: 'keyword',
+        args: match,
+      };
     } else if ((match = extract(whitespace)) !== undefined) {
-      yield ['implicit_and'];
+      // Ignore whitespace at the beginning and end of the string
+      if (startIndex !== 0 && i !== query.length) {
+        yield { startIndex, length: i - startIndex, type: 'implicit_and' };
+      }
     } else {
-      throw new Error('unrecognized tokens: |' + query.slice(i) + '| ' + i);
+      throw new QueryLexerError(
+        `unrecognized tokens: |${query.slice(i)}| ${i}`,
+        startIndex,
+        query.length - startIndex,
+      );
     }
 
-    if (startingIndex === i) {
+    if (startIndex === i) {
       throw new Error('bug: forgot to consume characters');
     }
   }
@@ -460,7 +577,7 @@ export function canonicalizeQuery(query: QueryAST, depth = 0): string {
             query.op === 'and' &&
               !query.operands.some((op) => op.op === 'filter' && op.type === 'keyword')
               ? ' '
-              : ` ${query.op} `
+              : ` ${query.op} `,
           );
         return depth === 0 ? joinedOperands : `(${joinedOperands})`;
       }

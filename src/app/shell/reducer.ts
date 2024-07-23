@@ -45,7 +45,7 @@ const initialState: ShellState = {
 
 export const shell: Reducer<ShellState, ShellAction> = (
   state: ShellState = initialState,
-  action: ShellAction
+  action: ShellAction,
 ): ShellState => {
   switch (action.type) {
     case getType(actions.setPhonePortrait):
@@ -66,7 +66,7 @@ export const shell: Reducer<ShellState, ShellAction> = (
               ? state.searchQueryVersion + 1
               : state.searchQueryVersion,
             searchResultsOpen:
-              state.searchResultsOpen ||
+              (query && state.searchResultsOpen) ||
               Boolean(state.isPhonePortrait && !state.searchQuery && query),
           }
         : state;

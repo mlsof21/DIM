@@ -1,12 +1,15 @@
 import { trackTriumph } from 'app/dim-api/basic-actions';
 import { trackedTriumphsSelector } from 'app/dim-api/selectors';
-import RichDestinyText from 'app/dim-ui/RichDestinyText';
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import { t } from 'app/i18next-t';
+import ItemPopupTrigger from 'app/inventory/ItemPopupTrigger';
+import { createItemContextSelector } from 'app/inventory/selectors';
 import { isBooleanObjective } from 'app/inventory/store/objectives';
 import { useD2Definitions } from 'app/manifest/selectors';
 import { Reward } from 'app/progress/Reward';
 import { percent } from 'app/shell/formatters';
 import { RootState } from 'app/store/types';
+import { HashLookup } from 'app/utils/util-types';
 import {
   DestinyItemQuantity,
   DestinyObjectiveProgress,
@@ -25,15 +28,9 @@ import ishtarIcon from '../../images/ishtar-collective.svg';
 import BungieImage from '../dim-ui/BungieImage';
 import ExternalLink from '../dim-ui/ExternalLink';
 import Objective from '../progress/Objective';
-import { DimRecord } from './presentation-nodes';
 import styles from './Record.m.scss';
-
-interface Props {
-  record: DimRecord;
-  completedRecordsHidden: boolean;
-  redactedRecordsRevealed: boolean;
-  hideRecordIcon?: boolean;
-}
+import { makeItemForCatalystRecord } from './catalysts';
+import { DimRecord } from './presentation-nodes';
 
 interface RecordInterval {
   objective: DestinyObjectiveProgress;
@@ -43,14 +40,15 @@ interface RecordInterval {
   rewards: DestinyItemQuantity[];
 }
 
-const overrideIcons = Object.keys(catalystIcons).map(Number);
+const catalystIconsTable = catalystIcons as HashLookup<string>;
 
-export default function Record({
+function Record({
   record,
-  completedRecordsHidden,
   redactedRecordsRevealed,
-  hideRecordIcon,
-}: Props) {
+}: {
+  record: DimRecord;
+  redactedRecordsRevealed: boolean;
+}) {
   const defs = useD2Definitions()!;
   const { recordDef, trackedInGame, recordComponent } = record;
   const state = recordComponent.state;
@@ -65,12 +63,14 @@ export default function Record({
     !acquired &&
     Boolean(state & DestinyRecordState.Obscured);
   const trackedInDim = useSelector((state: RootState) =>
-    trackedTriumphsSelector(state).includes(recordHash)
+    trackedTriumphsSelector(state).includes(recordHash),
   );
   const loreLink =
     !obscured &&
-    recordDef.loreHash &&
+    recordDef.loreHash !== undefined &&
     `http://www.ishtar-collective.net/entries/${recordDef.loreHash}`;
+
+  const recordShouldGlow = (recordDef.forTitleGilding && acquired) || trackedInDim;
 
   const name = obscured ? t('Progress.SecretTriumph') : recordDef.displayProperties.name;
 
@@ -78,13 +78,11 @@ export default function Record({
     ? recordDef.stateInfo.obscuredString
     : recordDef.displayProperties.description;
 
-  const recordIcon = overrideIcons.includes(recordHash)
-    ? catalystIcons[recordHash]
-    : recordDef.displayProperties.icon;
+  const isCatalyst = recordHash in catalystIconsTable;
+  const recordIcon = isCatalyst ? catalystIconsTable[recordHash] : recordDef.displayProperties.icon;
 
-  if (completedRecordsHidden && acquired) {
-    return null;
-  }
+  const itemCreationContext = useSelector(createItemContextSelector);
+  const catalystTarget = isCatalyst && makeItemForCatalystRecord(recordHash, itemCreationContext);
 
   const intervals = getIntervals(recordDef, recordComponent);
   const intervalBarStyle = {
@@ -126,7 +124,7 @@ export default function Record({
   if (intervals.length > 1) {
     const currentScore = _.sumBy(
       _.take(intervals, recordComponent.intervalsRedeemedCount),
-      (i) => i.score
+      (i) => i.score,
     );
     const totalScore = _.sumBy(intervals, (i) => i.score);
     scoreValue = (
@@ -156,7 +154,7 @@ export default function Record({
         !isBooleanObjective(
           defs.Objective.get(objectives[0].objectiveHash),
           objectives[0].progress ?? 0,
-          objectives[0].completionValue
+          objectives[0].completionValue,
         )));
 
   // TODO: show track badge greyed out / on hover
@@ -171,13 +169,25 @@ export default function Record({
       className={clsx(styles.triumphRecord, {
         [styles.redeemed]: acquired,
         [styles.unlocked]: unlocked,
+        [styles.gildingTriumph]: recordDef.forTitleGilding,
         [styles.obscured]: obscured,
         [styles.tracked]: trackedInGame,
         [styles.trackedInDim]: trackedInDim,
         [styles.multistep]: intervals.length > 0,
       })}
     >
-      {!hideRecordIcon && recordIcon && <BungieImage className={styles.icon} src={recordIcon} />}
+      {recordShouldGlow && <div className={styles.glow} />}
+      {catalystTarget && recordIcon ? (
+        <ItemPopupTrigger item={catalystTarget}>
+          {(ref, onClick) => (
+            <div className={styles.clickable} ref={ref} onClick={onClick}>
+              <BungieImage className={styles.icon} src={recordIcon} />
+            </div>
+          )}
+        </ItemPopupTrigger>
+      ) : (
+        recordIcon && <BungieImage className={styles.icon} src={recordIcon} />
+      )}
       <div className={styles.info}>
         {!obscured && recordDef.completionInfo && <div className={styles.score}>{scoreValue}</div>}
         <h3>{name}</h3>
@@ -205,13 +215,16 @@ export default function Record({
           !acquired &&
           !obscured &&
           rewards.map((reward) => <Reward key={reward.itemHash} reward={reward} />)}
-        {trackedInGame && <img className={styles.trackedIcon} src={trackedIcon} />}
-        {(!acquired || trackedInDim) && (
-          <div role="button" onClick={toggleTracked} className={styles.dimTrackedIcon}>
-            <img src={dimTrackedIcon} />
-          </div>
+        {recordDef.forTitleGilding && !obscured && (
+          <p className={styles.gildingText}>{t('Triumphs.GildingTriumph')}</p>
         )}
+        {trackedInGame && <img className={styles.trackedIcon} src={trackedIcon} />}
       </div>
+      {(!acquired || trackedInDim) && (
+        <div role="button" onClick={toggleTracked} className={styles.dimTrackedIcon}>
+          <img src={dimTrackedIcon} />
+        </div>
+      )}
       {intervalProgressBar}
     </div>
   );
@@ -219,7 +232,7 @@ export default function Record({
 
 function getIntervals(
   definition: DestinyRecordDefinition,
-  record: DestinyRecordComponent
+  record: DestinyRecordComponent,
 ): RecordInterval[] {
   const intervalDefinitions = definition?.intervalInfo?.intervalObjectives || [];
   const intervalObjectives = record?.intervalObjectives || [];
@@ -245,7 +258,7 @@ function getIntervals(
           : Math.max(
               0,
               ((data.progress || 0) - prevIntervalProgress) /
-                (data.completionValue - prevIntervalProgress)
+                (data.completionValue - prevIntervalProgress),
             )
         : 0,
       isRedeemed: record.intervalsRedeemedCount >= i + 1,
@@ -256,4 +269,34 @@ function getIntervals(
     prevIntervalProgress = data.completionValue;
   }
   return intervals;
+}
+
+/** A grid of records as seen in triumph presentation nodes or Tracked Triumphs. */
+export function RecordGrid({
+  records,
+  redactedRecordsRevealed,
+}: {
+  records: DimRecord[];
+  redactedRecordsRevealed: boolean;
+}) {
+  // TODO: was there really a problem with duplicate records?
+  const seenRecords = new Set<number>();
+
+  return (
+    <div className={styles.recordsGrid}>
+      {records.map((record) => {
+        if (seenRecords.has(record.recordDef.hash)) {
+          return null;
+        }
+        seenRecords.add(record.recordDef.hash);
+        return (
+          <Record
+            key={record.recordDef.hash}
+            record={record}
+            redactedRecordsRevealed={redactedRecordsRevealed}
+          />
+        );
+      })}
+    </div>
+  );
 }

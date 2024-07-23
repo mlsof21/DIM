@@ -2,8 +2,10 @@
 // Please do not change this file!
 interface CssExports {
   'buttons': string;
+  'clearButton': string;
   'contents': string;
   'mods': string;
+  'section': string;
 }
 export const cssExports: CssExports;
 export default cssExports;

@@ -2,6 +2,8 @@ import { emptySet } from 'app/utils/empty';
 import { timer, warnLog } from 'app/utils/log';
 import { DimWishList, WishListAndInfo, WishListInfo, WishListRoll } from './types';
 
+const TAG = 'wishlist';
+
 /**
  * The title should follow the following format:
  * title:This Is My Source File Title.
@@ -22,8 +24,10 @@ const notesLabel = '//notes:';
  * one or more wish list text files, deduplicating within
  * and between lists.
  */
-export function toWishList(...fileTexts: string[]): WishListAndInfo {
-  const stopTimer = timer('Parse wish list');
+export function toWishList(
+  ...files: [url: string | undefined, contents: string][]
+): WishListAndInfo {
+  const stopTimer = timer(TAG, 'Parse wish list');
   try {
     const wishList: WishListAndInfo = {
       wishListRolls: [],
@@ -32,8 +36,9 @@ export function toWishList(...fileTexts: string[]): WishListAndInfo {
 
     const seen = new Set<string>();
 
-    for (const fileText of fileTexts) {
+    for (const [url, fileText] of files) {
       const info: WishListInfo = {
+        url,
         title: undefined,
         description: undefined,
         numRolls: 0,
@@ -61,7 +66,7 @@ export function toWishList(...fileTexts: string[]): WishListAndInfo {
 
           if (roll) {
             const rollHash = `${roll.itemHash};${roll.isExpertMode};${sortedSetToString(
-              roll.recommendedPerks
+              roll.recommendedPerks,
             )}`;
 
             if (!seen.has(rollHash)) {
@@ -76,7 +81,7 @@ export function toWishList(...fileTexts: string[]): WishListAndInfo {
       }
 
       if (dupes > 0) {
-        warnLog('wishlist', 'Discarded', dupes, 'duplicate rolls from wish list');
+        warnLog(TAG, 'Discarded', dupes, 'duplicate rolls from wish list', url);
       }
       wishList.infos.push(info);
     }
@@ -99,7 +104,7 @@ function parseBlockNoteLine(blockNoteLine: string): string | undefined {
 }
 
 function getPerks(matchResults: RegExpMatchArray): Set<number> {
-  if (!matchResults.groups || matchResults.groups.itemPerks === undefined) {
+  if (matchResults.groups?.itemPerks === undefined) {
     return emptySet<number>();
   }
 

@@ -1,8 +1,10 @@
 import { rankProgressionHashesSelector } from 'app/manifest/selectors';
+import { LookupTable } from 'app/utils/util-types';
 import { DestinyProfileResponse } from 'bungie-api-ts/destiny2';
 import { ProgressionHashes } from 'data/d2/generated-enums';
 import { useSelector } from 'react-redux';
-import { CrucibleRank } from './CrucibleRank';
+import PursuitGrid from './PursuitGrid';
+import { ReputationRank } from './ReputationRank';
 import { getCharacterProgressions } from './selectors';
 
 // There are 2 similar DestinyProgression definitions for each rank
@@ -32,12 +34,11 @@ import { getCharacterProgressions } from './selectors';
 //   }))
 // );
 
-const rankProgressionToStreakProgression = {
+const rankProgressionToStreakProgression: LookupTable<ProgressionHashes, number> = {
   [ProgressionHashes.CrucibleRank]: 2203850209,
   [ProgressionHashes.GloryRank]: 2572719399,
   [ProgressionHashes.GambitRank]: 2939151659,
   [ProgressionHashes.VanguardRank]: 600547406,
-  [ProgressionHashes.TrialsRank]: 70699614,
   [ProgressionHashes.StrangeFavor]: 1999336308,
 };
 
@@ -49,20 +50,20 @@ export default function Ranks({ profileInfo }: { profileInfo: DestinyProfileResp
   const progressionHashes = useSelector(rankProgressionHashesSelector);
 
   return (
-    <div className="progress-for-character ranks-for-character">
+    <PursuitGrid ranks>
       {progressionHashes.map(
-        (progressionHash) =>
+        (progressionHash: ProgressionHashes) =>
           firstCharacterProgression[progressionHash] && (
-            <CrucibleRank
+            <ReputationRank
               key={progressionHash}
               progress={firstCharacterProgression[progressionHash]}
               streak={
-                firstCharacterProgression[rankProgressionToStreakProgression[progressionHash]]
+                firstCharacterProgression[rankProgressionToStreakProgression[progressionHash] ?? 0]
               }
-              resetCount={firstCharacterProgression[progressionHash]?.currentResetCount}
+              isProgressRanks
             />
-          )
+          ),
       )}
-    </div>
+    </PursuitGrid>
   );
 }

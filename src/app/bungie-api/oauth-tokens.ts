@@ -34,7 +34,7 @@ const localStorageKey = 'authorization';
  */
 export function getToken(): Tokens | null {
   const tokenString = localStorage.getItem(localStorageKey);
-  return tokenString ? JSON.parse(tokenString) : null;
+  return tokenString ? (JSON.parse(tokenString) as Tokens) : null;
 }
 
 /**
@@ -62,10 +62,7 @@ export function hasValidAuthTokens() {
 
   // Get a new token from refresh token
   const refreshTokenIsValid = token && !hasTokenExpired(token.refreshToken);
-  if (!refreshTokenIsValid) {
-    return false;
-  }
-  return true;
+  return refreshTokenIsValid;
 }
 
 /**
@@ -86,11 +83,7 @@ export function removeAccessToken() {
  * @return UTC epoch milliseconds timestamp
  */
 function getTokenExpiration(token?: Token): number {
-  if (
-    token &&
-    Object.prototype.hasOwnProperty.call(token, 'inception') &&
-    Object.prototype.hasOwnProperty.call(token, 'expires')
-  ) {
+  if (token && 'inception' in token && 'expires' in token) {
     const inception = token.inception;
     return inception + token.expires * 1000;
   }

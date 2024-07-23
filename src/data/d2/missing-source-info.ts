@@ -16,7 +16,9 @@ const missingSources: { [key: string]: number[] } = {
     3871537958, // Descending Echo Helm
     4050474396, // Descending Echo Mark
   ],
-  ada: [],
+  ada: [
+    2533990645, // Blast Furnace
+  ],
   adventure: [
     11686457, // Unethical Experiments Cloak
     11686458, // Orobas Vectura Cloak
@@ -37,175 +39,32 @@ const missingSources: { [key: string]: number[] } = {
     3706457514, // Gearhead Grips
     3706457515, // Songbreaker Grips
   ],
-  banshee: [
-    1324233016, // Sword Scavenger
-    1324233019, // Scout Rifle Loader
-    2187989977, // Machine Gun Scavenger
+  blackarmory: [
+    2533990645, // Blast Furnace
   ],
-  battlegrounds: [],
-  blackarmory: [],
-  calus: [
-    17280095, // Shadow's Strides
-    30962015, // Boots of the Ace-Defiant
-    64543268, // Boots of the Emperor's Minister
-    64543269, // Boots of the Fulminator
-    223783885, // Insigne Shade Bond
-    239489770, // Bond of Sekris
-    253344425, // Mask of Feltroc
-    256904954, // Shadow's Grips
-    288406317, // Greaves of Rull
-    309687341, // Shadow's Greaves
-    311429765, // Mark of the Emperor's Champion
-    325125949, // Shadow's Helm
-    325434398, // Vest of the Ace-Defiant
-    325434399, // Vest of the Emperor's Agent
-    336656483, // Boots of the Emperor's Minister
-    340118991, // Boots of Sekris
-    383742277, // Cloak of Feltroc
-    407863747, // Vest of the Ace-Defiant
-    455108040, // Helm of the Emperor's Champion
-    455108041, // Mask of Rull
-    503773817, // Insigne Shade Gloves
-    548581042, // Insigne Shade Boots
-    560455272, // Penumbral Mark
-    574137192, // Shadow's Mark
-    581908796, // Bond of the Emperor's Minister
-    588627781, // Bond of Sekris
-    608074492, // Robes of the Emperor's Minister
-    608074493, // Robes of the Fulminator
-    612065993, // Penumbral Mark
-    618662448, // Headpiece of the Emperor's Minister
-    641933203, // Mask of the Emperor's Agent
-    666883012, // Gauntlets of Nohr
-    748485514, // Mask of the Fulminator
-    748485515, // Headpiece of the Emperor's Minister
-    754149842, // Wraps of the Emperor's Minister
-    754149843, // Wraps of the Fulminator
-    796914932, // Mask of Sekris
-    802557885, // Turris Shade Gauntlets
-    845536715, // Vest of Feltroc
-    853543290, // Greaves of Rull
-    853543291, // Greaves of the Emperor's Champion
-    855363300, // Turris Shade Helm
-    874272413, // Shadow's Robes
-    917591018, // Grips of the Ace-Defiant
-    917591019, // Gloves of the Emperor's Agent
-    974648224, // Shadow's Boots
-    1034660314, // Boots of Feltroc
-    1108389626, // Gloves of the Emperor's Agent
-    1156439528, // Insigne Shade Cover
-    1230192769, // Robes of the Emperor's Minister
-    1242139836, // Plate of Nohr
-    1256688732, // Mask of Feltroc
-    1296628624, // Insigne Shade Robes
-    1339632007, // Turris Shade Helm
-    1354679721, // Cloak of the Emperor's Agent
-    1390282760, // Chassis of Rull
-    1390282761, // Cuirass of the Emperor's Champion
-    1413589586, // Mask of Rull
-    1434870610, // Shadow's Helm
-    1457195686, // Shadow's Gloves
-    1481751647, // Shadow's Mind
-    1675393889, // Insigne Shade Cover
-    1756558505, // Mask of Sekris
-    1793869832, // Turris Shade Greaves
-    1862963733, // Shadow's Plate
-    1876645653, // Chassis of Rull
-    1879942843, // Gauntlets of Rull
-    1901223867, // Shadow's Gauntlets
-    1934647691, // Shadow's Mask
-    1937834292, // Shadow's Strides
-    1946621757, // Shadow's Grips
-    1960303677, // Grips of the Ace-Defiant
-    1991039861, // Mask of Nohr
-    1999427172, // Shadow's Mask
-    2013109092, // Helm of the Ace-Defiant
-    2023695690, // Shadow's Robes
-    2070062384, // Shadow's Bond
-    2070062385, // Bond of the Emperor's Minister
-    2128823667, // Turris Shade Mark
-    2153222031, // Shadow's Gloves
-    2158603584, // Gauntlets of Rull
-    2158603585, // Gauntlets of the Emperor's Champion
-    2183861870, // Gauntlets of the Emperor's Champion
-    2193494688, // Boots of the Fulminator
-    2194479195, // Penumbral Bond
-    2232730708, // Vest of the Emperor's Agent
-    2329031091, // Robes of Sekris
-    2339720736, // Grips of Feltroc
-    2369496221, // Plate of Nohr
-    2513313400, // Insigne Shade Gloves
-    2537874394, // Boots of Sekris
-    2552158692, // Equitis Shade Rig
-    2597529070, // Greaves of Nohr
-    2620001759, // Insigne Shade Robes
-    2653039573, // Grips of Feltroc
-    2676042150, // Wraps of the Fulminator
-    2700598111, // Mask of the Fulminator
-    2710517999, // Equitis Shade Grips
-    2722103686, // Equitis Shade Boots
-    2758465168, // Greaves of the Emperor's Champion
-    2765688378, // Penumbral Cloak
-    2769298993, // Shadow's Boots
-    2904930850, // Turris Shade Plate
-    2913992255, // Helm of the Emperor's Champion
-    2933666377, // Equitis Shade Rig
-    2976612200, // Vest of Feltroc
-    2994007601, // Mark of Nohr
-    3066613133, // Equitis Shade Cowl
-    3082625196, // Shadow's Gauntlets
-    3092380260, // Mark of the Emperor's Champion
-    3092380261, // Shadow's Mark
-    3099636805, // Greaves of Nohr
-    3108321700, // Penumbral Bond
-    3168183519, // Turris Shade Greaves
-    3181497704, // Robes of Sekris
-    3285121297, // Equitis Shade Boots
-    3292127944, // Cuirass of the Emperor's Champion
-    3349283422, // Shadow's Mind
-    3359121706, // Mask of Nohr
-    3364682867, // Gauntlets of Nohr
-    3395856235, // Insigne Shade Boots
-    3416932282, // Turris Shade Mark
-    3440648382, // Equitis Shade Cowl
-    3483984579, // Shadow's Vest
-    3497220322, // Cloak of Feltroc
-    3517729518, // Shadow's Vest
-    3518193943, // Penumbral Cloak
-    3530284425, // Wraps of the Emperor's Minister
-    3581198350, // Turris Shade Gauntlets
-    3592548938, // Robes of the Fulminator
-    3711700026, // Mask of the Emperor's Agent
-    3711700027, // Helm of the Ace-Defiant
-    3719175804, // Equitis Shade Grips
-    3720446265, // Equitis Shade Cloak
-    3759659288, // Shadow's Plate
-    3763332443, // Shadow's Bond
-    3831484112, // Mark of Nohr
-    3842934816, // Wraps of Sekris
-    3853397100, // Boots of the Emperor's Agent
-    3867160430, // Insigne Shade Bond
-    3950028838, // Cloak of the Emperor's Agent
-    3950028839, // Shadow's Cloak
-    3964287245, // Wraps of Sekris
-    3984534842, // Shadow's Cloak
-    4135228483, // Turris Shade Plate
-    4152814806, // Shadow's Greaves
-    4229161783, // Boots of Feltroc
-    4247935492, // Equitis Shade Cloak
-    4251770244, // Boots of the Ace-Defiant
-    4251770245, // Boots of the Emperor's Agent
+  brave: [
+    211732170, // Hammerhead
+    243425374, // Falling Guillotine
+    570866107, // Succession
+    2228325504, // Edge Transit
+    2499720827, // Midnight Coup
+    3757612024, // Luna's Howl
+    3851176026, // Elsie's Rifle
   ],
   campaign: [
     423789, // Mythos Hack 4.1
+    644105, // Heavy Ammo Finder
     11686456, // Dreamer's Cloak
     13719069, // Atgeir Mark
     40512774, // Farseeker's Casque
+    56663992, // Solar Scavenger
     59990642, // Refugee Plate
     67798808, // Atonement Tau
     76554114, // Cry Defiance
     83898430, // Scavenger Suit
     91289429, // Atonement Tau
+    95934356, // Strand Loader
+    96682422, // Arc Targeting
     124410141, // Shadow Specter
     126602378, // Primal Siege Type 1
     137713267, // Refugee Vest
@@ -220,8 +79,10 @@ const missingSources: { [key: string]: number[] } = {
     255520209, // Cloak of Retelling
     280187206, // Hardcase Battleplate
     288815409, // Renegade Greaves
+    293178904, // Unflinching Harmonic Aim
     320174990, // Bond of Chiron
     320310251, // Dreamer's Bond
+    331268185, // Solar Targeting
     341343759, // Prophet Snow
     341468857, // Bond of Insight
     366418892, // The Outlander's Grip
@@ -230,9 +91,11 @@ const missingSources: { [key: string]: number[] } = {
     397654099, // Wastelander Vest
     402937789, // Shadow Specter
     406995961, // Stagnatious Rebuke
+    411014648, // Solar Reserves
     417821705, // Primal Siege Type 1
     418611312, // Shadow Specter
     420937712, // War Mantis Cloak
+    422994787, // Emergency Reinforcement
     452060094, // Refugee Gloves
     457297858, // Atgeir 2T1
     459778797, // Refugee Mask
@@ -243,9 +106,11 @@ const missingSources: { [key: string]: number[] } = {
     482091581, // Hardcase Stompers
     484126150, // Chiron's Cure
     516502270, // Firebreak Field
+    531665167, // Solar Dexterity
     539726822, // Refugee Boots
     550258943, // Chiron's Cure
     558125905, // Frumious Mask
+    579997810, // Kinetic Scavenger
     598178607, // Mark of Confrontation
     600059642, // The Outlander's Cloak
     610837228, // Raven Shard
@@ -253,12 +118,15 @@ const missingSources: { [key: string]: number[] } = {
     622291842, // Farseeker's March
     625602056, // Memory of Cayde Cloak
     627055961, // Fortress Field
+    634608391, // Solar Loader
     643145875, // Legion-Bane
     648022469, // Makeshift Suit
     648638907, // Kit Fox 2.1
+    657773637, // Sniper Damage Resistance
     674335586, // Chiron's Cure
     696808195, // Refugee Mark
     703683040, // Atgeir 2T1
+    703902595, // Stasis Loader
     720723122, // At Least It's a Cape
     721208609, // Farseeker's Intuition
     732520437, // Baseline Mark
@@ -269,8 +137,10 @@ const missingSources: { [key: string]: number[] } = {
     747210772, // Mythos Hack 4.1
     777818225, // Fieldplate Type 10
     789384557, // Atonement Tau
+    792400107, // Unflinching Arc Aim
     795389673, // The Outlander's Cloak
     803939997, // War Mantis
+    830369300, // Lucent Blades
     833626649, // Chiron's Cure
     844823562, // Mechanik 1.1
     846463017, // Fieldplate Type 10
@@ -280,23 +150,42 @@ const missingSources: { [key: string]: number[] } = {
     867963905, // Hardcase Brawlers
     868799838, // Renegade Helm
     871442456, // Refugee Boots
+    877723168, // Harmonic Scavenger
     881194063, // Prophet Snow
     897275209, // The Outlander's Heart
+    897335593, // Kinetic Siphon
     905249529, // Shadow Specter
     911039437, // Refugee Gloves
+    930759851, // Concussive Dampener
     933345182, // Fieldplate Type 10
+    965934024, // Firepower
     995248967, // Makeshift Suit
     1012254326, // The Outlander's Steps
     1014677029, // Memory of Cayde
+    1017385934, // Void Dexterity
+    1019574576, // Unflinching Solar Aim
     1022126988, // Baseline Mark
+    1036557198, // Hands-On
+    1044888195, // Utility Kickstart
     1045948748, // Mythos Hack 4.1
     1048498953, // Bond of the Raven Shard
     1070180272, // Hardcase Helm
+    1086997255, // Solar Siphon
+    1103878128, // Harmonic Reserves
+    1118428792, // Unflinching Stasis Aim
     1118437892, // War Mantis
+    1124184622, // Minor Recovery Mod
+    1139671158, // Melee Kickstart
+    1153260021, // Impact Induction
     1169595348, // Mythos Hack 4.1
+    1176372075, // Stasis Resistance
+    1208761894, // Empowered Finish
+    1210012576, // Void Siphon
+    1255614814, // Font of Focus
     1256569366, // Raven Shard
     1279721672, // Fortress Field
     1300106409, // Prophet Snow
+    1305848463, // Strand Scavenger
     1328755281, // Farseeker's Casque
     1331205087, // Cosmic Wind III
     1360445272, // Firebreak Field
@@ -313,75 +202,116 @@ const missingSources: { [key: string]: number[] } = {
     1486292360, // Chiron's Cure
     1488618333, // Chiron's Cure
     1500704923, // Prophet Snow
+    1501094193, // Strand Weapon Surge
     1503713660, // Stagnatious Rebuke
     1512570524, // Hardcase Stompers
     1556652797, // The Outlander's Grip
+    1561736585, // Kinetic Dexterity
     1578478684, // Refugee Gloves
     1581838479, // Refugee Boots
+    1604394872, // Dynamo
     1611221278, // Prophet Snow
     1616317796, // Prophet Snow
+    1627901452, // Stacks on Stacks
     1630079134, // Bond of Forgotten Wars
     1658512403, // Mythos Hack 4.1
     1665016007, // Primal Siege Type 1
+    1672155562, // Font of Restoration
     1691784182, // Mythos Hack 4.1
     1701236611, // The Outlander's Heart
+    1702273159, // Harmonic Loader
+    1709236482, // Heavy Handed
     1715842350, // Generalist Shell
     1736993473, // Legion-Bane
+    1763607626, // Strength Mod
     1775818231, // Legion-Bane
+    1783952505, // Time Dilation
     1784774885, // Vector Home
+    1801153435, // Stasis Targeting
     1824298413, // War Mantis
     1848999098, // Bond of Symmetry
     1862164825, // War Mantis Cloak
+    1866564759, // Intellect Mod
     1872887954, // Atonement Tau
+    1891463783, // Harmonic Targeting
+    1901221009, // Font of Agility
     1912568536, // Primal Siege Type 1
     1915498345, // Cloak of Retelling
+    1924584408, // Grenade Kickstart
     1933944659, // Hardcase Helm
     1965476837, // War Mantis
     1981225397, // Shadow Specter
     1988790493, // Stagnatious Rebuke
     1992338980, // The Outlander's Cover
     2002682954, // Vector Home
+    2031584061, // Momentum Transfer
     2049820819, // Vector Home
     2065578431, // Shadow Specter
+    2113881316, // Minor Resilience Mod
+    2136310244, // Ashes to Assets
     2148305277, // Raven Shard
     2151724216, // Prophet Snow
     2159062493, // Mythos Hack 4.1
     2162276668, // Cry Defiance
     2165661157, // Baseline Mark
     2183384906, // War Mantis
-    2187989983, // Focusing Strike
     2190967049, // Prophet Snow
     2211544324, // The Outlander's Cloak
+    2214424583, // Kinetic Targeting
     2230522771, // War Mantis
+    2237975061, // Kinetic Loader
+    2245839670, // Proximity Ward
+    2246316031, // Arc Weapon Surge
     2253044470, // Legion-Bane
+    2267311547, // Stasis Dexterity
+    2283894334, // Solar Weapon Surge
+    2303417969, // Strand Reserves
+    2305736470, // Kinetic Reserves
     2317046938, // Shadow Specter
+    2318667184, // Kinetic Weapon Surge
+    2325151798, // Unflinching Kinetic Aim
     2329963686, // Mark of Confrontation
     2339344379, // Atonement Tau
     2343139242, // Bond of Refuge
     2362809459, // Hardcase Stompers
     2363903643, // Makeshift Suit
+    2413278875, // Void Reserves
     2426340790, // Dreamer's Mark
+    2436471653, // Arc Scavenger
     2441435355, // Prophet Snow
     2459075622, // RPC Valiant
     2466525328, // RPC Valiant
     2476964124, // War Mantis
+    2479297167, // Harmonic Dexterity
+    2493161484, // Recovery Mod
     2504771764, // Refugee Helm
+    2519597513, // Minor Intellect Mod
+    2526922422, // Stasis Weapon Surge
     2541019576, // Mark of Confrontation
+    2562645296, // Melee Damage Resistance
     2567295299, // Cosmic Wind III
+    2568808786, // Resilience Mod
     2574857320, // Sly Cloak
     2583547635, // Cry Defiance
     2626766308, // Mark of the Longest Line
+    2634786903, // Void Holster
     2640935765, // Memory of Cayde
     2644553610, // Renegade Hood
     2689896341, // Mythos Hack 4.1
     2739875972, // RPC Valiant
     2742930797, // Fatum Praevaricator
     2745108287, // War Mantis
+    2771425787, // Font of Vigor
+    2788997987, // Void Resistance
+    2794359402, // Arc Dexterity
+    2801811288, // Stasis Holster
     2803009638, // Cry Defiance
     2803481901, // RPC Valiant
+    2805854721, // Strand Holster
     2813695893, // Fatum Praevaricator
     2814965254, // Aspirant Boots
     2815743359, // Legion-Bane
+    2815817957, // Void Scavenger
     2822491218, // Atonement Tau
     2825160682, // RPC Valiant
     2833813592, // Bond of Chiron
@@ -389,17 +319,24 @@ const missingSources: { [key: string]: number[] } = {
     2871824910, // Mythos Hack 4.1
     2880545163, // Black Shield Mark
     2886651369, // Renegade Plate
+    2888195476, // Void Targeting
     2893448006, // Farseeker's March
     2930768301, // Wastelander Wraps
     2937068650, // Chiron's Cure
     2943629439, // Chiron's Cure
     2959986506, // Prophet Snow
+    2982306509, // Power Preservation
     2983961673, // Primal Siege Type 1
     2985655620, // Refugee Vest
     2994740249, // RPC Valiant
+    2996369932, // Elemental Charge
     3007889693, // RPC Valiant
+    3013778406, // Strand Targeting
     3035240099, // Shadow Specter
+    3046678542, // Arc Loader
+    3047946307, // Shield Break Charge
     3061532064, // Farseeker's Intuition
+    3075302157, // Font of Endurance
     3080409700, // Bond of Forgotten Wars
     3102366928, // Atonement Tau
     3121104079, // Rite of Refusal
@@ -408,11 +345,19 @@ const missingSources: { [key: string]: number[] } = {
     3163241201, // Primal Siege Type 1
     3164547673, // Atonement Tau
     3174394351, // The Outlander's Grip
+    3174771856, // Stasis Scavenger
     3183585337, // Legion-Bane
+    3184690956, // Absolution
+    3188328909, // Stasis Siphon
     3212340413, // War Mantis
+    3224649746, // Void Loader
     3238424670, // Memory of Cayde Mark
+    3245543337, // Bolstering Detonation
     3260546749, // Cosmic Wind
     3264653916, // Mythos Hack 4.1
+    3276278122, // Kinetic Holster
+    3279257734, // Strand Siphon
+    3294892432, // Stasis Reserves
     3302420523, // Hardcase Brawlers
     3309120116, // Shadow Specter
     3310450277, // Scavenger Suit
@@ -426,6 +371,8 @@ const missingSources: { [key: string]: number[] } = {
     3437155610, // War Mantis Cloak
     3438103366, // Black Shield Mark
     3456147612, // RPC Valiant
+    3456250548, // Stasis Resistance
+    3461249873, // Font of Wisdom
     3465323600, // Legion-Bane
     3468148580, // Aspirant Robes
     3483602905, // Mark of Inquisition
@@ -434,32 +381,46 @@ const missingSources: { [key: string]: number[] } = {
     3519241547, // Fortress Field
     3523134386, // Firebreak Field
     3524846593, // Atonement Tau
+    3539253011, // Arc Resistance
     3544711340, // Memory of Cayde Mark
     3544884935, // Hood of Tallies
     3554672786, // Memory of Cayde Cloak
     3556023425, // Scavenger Cloak
     3573886331, // Bond of Chiron
     3585730968, // Shadow Specter
+    3598972737, // Unflinching Strand Aim
     3639035739, // Mechanik 1.2
     3643144047, // Wastelander Boots
     3650925928, // Atgeir 2T1
     3656549306, // Legion-Bane
+    3657186535, // Focusing Strike
+    3675553168, // Solar Holster
     3693917763, // Mark of the Fire
     3725709067, // Chiron's Cure
     3748997649, // The Outlander's Steps
     3763392098, // Hardcase Brawlers
+    3775800797, // Special Ammo Finder
     3790903614, // Mechanik 2.1
+    3791691774, // Orbs of Restoration
+    3798468567, // Arc Holster
+    3808902618, // Mobility Mod
     3812037372, // Aspirant Gloves
+    3846931924, // Solar Resistance
+    3847471926, // Arc Siphon
     3867725217, // Legion-Bane
     3877365781, // Kit Fox 1.4
     3880804895, // The Outlander's Steps
     3885104741, // Hardcase Battleplate
+    3887037435, // Unflinching Void Aim
+    3896141096, // Discipline Mod
     3904524734, // The Outlander's Cover
+    3914973263, // Void Weapon Surge
     3922069396, // The Outlander's Heart
     3958133156, // Farseeker's Intuition
     3962776002, // Hardcase Helm
     3967705743, // Renegade Gauntlets
     3968319087, // Legion-Bane
+    3979300428, // Strand Dexterity
     4012302343, // Bond of Forgotten Wars
     4035217656, // Atonement Tau
     4052950089, // Shadow Specter
@@ -469,6 +430,7 @@ const missingSources: { [key: string]: number[] } = {
     4100043028, // Wastelander Mask
     4133705268, // Raven Shard
     4135938411, // Last City Shell (Damaged)
+    4149682173, // Reaper
     4155348771, // War Mantis
     4166795065, // Primal Siege Type 1
     4174470997, // Mark of Inquisition
@@ -478,13 +440,44 @@ const missingSources: { [key: string]: number[] } = {
     4200817316, // Mark of the Renegade
     4230626646, // Shadow Specter
     4248632159, // Frumious Mask
+    4267244538, // Distribution
     4267370571, // Chiron's Cure
     4281850920, // Farseeker's Reach
+    4283953067, // Arc Reserves
     4288395850, // Cloak of Retelling
   ],
-  cayde6: [],
-  compass: [],
-  contact: [],
+  cos: [
+    17280095, // Shadow's Strides
+    256904954, // Shadow's Grips
+    309687341, // Shadow's Greaves
+    325125949, // Shadow's Helm
+    560455272, // Penumbral Mark
+    612065993, // Penumbral Mark
+    874272413, // Shadow's Robes
+    974648224, // Shadow's Boots
+    1434870610, // Shadow's Helm
+    1457195686, // Shadow's Gloves
+    1481751647, // Shadow's Mind
+    1862963733, // Shadow's Plate
+    1901223867, // Shadow's Gauntlets
+    1934647691, // Shadow's Mask
+    1937834292, // Shadow's Strides
+    1946621757, // Shadow's Grips
+    1999427172, // Shadow's Mask
+    2023695690, // Shadow's Robes
+    2153222031, // Shadow's Gloves
+    2194479195, // Penumbral Bond
+    2765688378, // Penumbral Cloak
+    2769298993, // Shadow's Boots
+    3082625196, // Shadow's Gauntlets
+    3108321700, // Penumbral Bond
+    3349283422, // Shadow's Mind
+    3483984579, // Shadow's Vest
+    3517729518, // Shadow's Vest
+    3518193943, // Penumbral Cloak
+    3759659288, // Shadow's Plate
+    4152814806, // Shadow's Greaves
+  ],
   crownofsorrow: [
     17280095, // Shadow's Strides
     256904954, // Shadow's Grips
@@ -520,10 +513,12 @@ const missingSources: { [key: string]: number[] } = {
   crucible: [
     85800627, // Ankaa Seeker IV
     98331691, // Binary Phoenix Mark
+    120859138, // Phoenix Strife Type 0
     185853176, // Wing Discipline
     252414402, // Swordflight 4.1
     283188616, // Wing Contender
     290136582, // Wing Theorem
+    315615761, // Ankaa Seeker IV
     327530279, // Wing Theorem
     328902054, // Swordflight 4.1
     356269375, // Wing Theorem
@@ -534,6 +529,7 @@ const missingSources: { [key: string]: number[] } = {
     468899627, // Binary Phoenix Mark
     530558102, // Phoenix Strife Type 0
     636679949, // Ankaa Seeker IV
+    657400178, // Swordflight 4.1
     670877864, // Binary Phoenix Mark
     727838174, // Swordflight 4.1
     744199039, // Wing Contender
@@ -544,6 +540,8 @@ const missingSources: { [key: string]: number[] } = {
     876608500, // Ankaa Seeker IV
     920187221, // Wing Discipline
     929917162, // Wing Theorem
+    944242985, // Ankaa Seeker IV
+    987343638, // Ankaa Seeker IV
     997903134, // Wing Theorem
     1036467370, // Wing Theorem
     1062166003, // Wing Contender
@@ -553,13 +551,16 @@ const missingSources: { [key: string]: number[] } = {
     1084033161, // Wing Contender
     1127237110, // Wing Contender
     1245115841, // Wing Theorem
+    1294217731, // Binary Phoenix Cloak
     1307478991, // Ankaa Seeker IV
+    1330581478, // Phoenix Strife Type 0
     1333087155, // Ankaa Seeker IV
     1464207979, // Wing Discipline
     1467590642, // Binary Phoenix Bond
     1484937602, // Phoenix Strife Type 0
     1548928853, // Phoenix Strife Type 0
     1571781304, // Swordflight 4.1
+    1648675919, // Binary Phoenix Mark
     1654427223, // Swordflight 4.1
     1658896287, // Binary Phoenix Cloak
     1673285051, // Wing Theorem
@@ -569,6 +570,7 @@ const missingSources: { [key: string]: number[] } = {
     1742940528, // Phoenix Strife Type 0
     1764274932, // Ankaa Seeker IV
     1801625827, // Swordflight 4.1
+    1828358334, // Swordflight 4.1
     1830829330, // Swordflight 4.1
     1838158578, // Binary Phoenix Bond
     1838273186, // Wing Contender
@@ -578,7 +580,10 @@ const missingSources: { [key: string]: number[] } = {
     2070517134, // Wing Contender
     2124666626, // Wing Discipline
     2191401041, // Phoenix Strife Type 0
+    2191437287, // Ankaa Seeker IV
+    2206581692, // Phoenix Strife Type 0
     2231762285, // Phoenix Strife Type 0
+    2247740696, // Swordflight 4.1
     2291226602, // Binary Phoenix Bond
     2293476915, // Swordflight 4.1
     2296560252, // Swordflight 4.1
@@ -590,15 +595,19 @@ const missingSources: { [key: string]: number[] } = {
     2466453881, // Wing Discipline
     2473130418, // Swordflight 4.1
     2496309431, // Wing Discipline
+    2511045676, // Binary Phoenix Bond
     2525395257, // Wing Theorem
     2543903638, // Phoenix Strife Type 0
     2555965565, // Wing Discipline
+    2627852659, // Phoenix Strife Type 0
     2670393359, // Phoenix Strife Type 0
     2718495762, // Swordflight 4.1
     2727890395, // Ankaa Seeker IV
+    2754844215, // Swordflight 4.1
     2775298636, // Ankaa Seeker IV
     2815422368, // Phoenix Strife Type 0
     3089908066, // Wing Discipline
+    3098328572, // The Recluse
     3098458331, // Ankaa Seeker IV
     3119528729, // Wing Contender
     3140634552, // Swordflight 4.1
@@ -616,6 +625,7 @@ const missingSources: { [key: string]: number[] } = {
     3781722107, // Phoenix Strife Type 0
     3818803676, // Wing Discipline
     3839561204, // Wing Theorem
+    4043921923, // The Mountaintop
     4043980813, // Ankaa Seeker IV
     4123918087, // Wing Contender
     4134090375, // Ankaa Seeker IV
@@ -624,181 +634,8 @@ const missingSources: { [key: string]: number[] } = {
     4211218181, // Ankaa Seeker IV
     4264096388, // Wing Theorem
   ],
-  dcv: [
-    17280095, // Shadow's Strides
-    30962015, // Boots of the Ace-Defiant
-    64543268, // Boots of the Emperor's Minister
-    64543269, // Boots of the Fulminator
-    223783885, // Insigne Shade Bond
-    239489770, // Bond of Sekris
-    253344425, // Mask of Feltroc
-    256904954, // Shadow's Grips
-    288406317, // Greaves of Rull
-    309687341, // Shadow's Greaves
-    311429765, // Mark of the Emperor's Champion
-    325125949, // Shadow's Helm
-    325434398, // Vest of the Ace-Defiant
-    325434399, // Vest of the Emperor's Agent
-    336656483, // Boots of the Emperor's Minister
-    340118991, // Boots of Sekris
-    350056552, // Bladesmith's Memory Mask
-    383742277, // Cloak of Feltroc
-    388999052, // Bulletsmith's Ire Mark
-    407863747, // Vest of the Ace-Defiant
-    455108040, // Helm of the Emperor's Champion
-    455108041, // Mask of Rull
-    503773817, // Insigne Shade Gloves
-    548581042, // Insigne Shade Boots
-    560455272, // Penumbral Mark
-    574137192, // Shadow's Mark
-    581908796, // Bond of the Emperor's Minister
-    588627781, // Bond of Sekris
-    608074492, // Robes of the Emperor's Minister
-    608074493, // Robes of the Fulminator
-    612065993, // Penumbral Mark
-    618662448, // Headpiece of the Emperor's Minister
-    641933203, // Mask of the Emperor's Agent
-    666883012, // Gauntlets of Nohr
-    748485514, // Mask of the Fulminator
-    748485515, // Headpiece of the Emperor's Minister
-    754149842, // Wraps of the Emperor's Minister
-    754149843, // Wraps of the Fulminator
-    796914932, // Mask of Sekris
-    802557885, // Turris Shade Gauntlets
-    845536715, // Vest of Feltroc
-    853543290, // Greaves of Rull
-    853543291, // Greaves of the Emperor's Champion
-    855363300, // Turris Shade Helm
-    874272413, // Shadow's Robes
-    886128573, // Mindbreaker Boots
-    917591018, // Grips of the Ace-Defiant
-    917591019, // Gloves of the Emperor's Agent
-    974648224, // Shadow's Boots
-    1034660314, // Boots of Feltroc
-    1108389626, // Gloves of the Emperor's Agent
-    1156439528, // Insigne Shade Cover
-    1230192769, // Robes of the Emperor's Minister
-    1242139836, // Plate of Nohr
-    1256688732, // Mask of Feltroc
-    1296628624, // Insigne Shade Robes
-    1339632007, // Turris Shade Helm
-    1354679721, // Cloak of the Emperor's Agent
-    1390282760, // Chassis of Rull
-    1390282761, // Cuirass of the Emperor's Champion
-    1413589586, // Mask of Rull
-    1434870610, // Shadow's Helm
-    1457195686, // Shadow's Gloves
-    1481751647, // Shadow's Mind
-    1624906371, // Gunsmith's Devotion Crown
-    1675393889, // Insigne Shade Cover
-    1701005142, // Songbreaker Gloves
-    1756558505, // Mask of Sekris
-    1793869832, // Turris Shade Greaves
-    1862963733, // Shadow's Plate
-    1876645653, // Chassis of Rull
-    1879942843, // Gauntlets of Rull
-    1901223867, // Shadow's Gauntlets
-    1917693279, // Bladesmith's Memory Vest
-    1934647691, // Shadow's Mask
-    1937834292, // Shadow's Strides
-    1946621757, // Shadow's Grips
-    1960303677, // Grips of the Ace-Defiant
-    1991039861, // Mask of Nohr
-    1999427172, // Shadow's Mask
-    2013109092, // Helm of the Ace-Defiant
-    2023695690, // Shadow's Robes
-    2070062384, // Shadow's Bond
-    2070062385, // Bond of the Emperor's Minister
-    2128823667, // Turris Shade Mark
-    2153222031, // Shadow's Gloves
-    2158603584, // Gauntlets of Rull
-    2158603585, // Gauntlets of the Emperor's Champion
-    2183861870, // Gauntlets of the Emperor's Champion
-    2193494688, // Boots of the Fulminator
-    2194479195, // Penumbral Bond
-    2232730708, // Vest of the Emperor's Agent
-    2317191363, // Mindbreaker Boots
-    2329031091, // Robes of Sekris
-    2339720736, // Grips of Feltroc
-    2369496221, // Plate of Nohr
-    2486041713, // Songbreaker Gauntlets
-    2513313400, // Insigne Shade Gloves
-    2530113265, // Bulletsmith's Ire Plate
-    2537874394, // Boots of Sekris
-    2552158692, // Equitis Shade Rig
-    2589473259, // Bladesmith's Memory Strides
-    2597529070, // Greaves of Nohr
-    2620001759, // Insigne Shade Robes
-    2653039573, // Grips of Feltroc
-    2676042150, // Wraps of the Fulminator
-    2700598111, // Mask of the Fulminator
-    2710517999, // Equitis Shade Grips
-    2722103686, // Equitis Shade Boots
-    2758465168, // Greaves of the Emperor's Champion
-    2762445138, // Gunsmith's Devotion Gloves
-    2765688378, // Penumbral Cloak
-    2769298993, // Shadow's Boots
-    2878130185, // Bulletsmith's Ire Greaves
-    2904930850, // Turris Shade Plate
-    2913284400, // Mindbreaker Boots
-    2913992255, // Helm of the Emperor's Champion
-    2921334134, // Bulletsmith's Ire Helm
-    2933666377, // Equitis Shade Rig
-    2976612200, // Vest of Feltroc
-    2994007601, // Mark of Nohr
-    3066613133, // Equitis Shade Cowl
-    3082625196, // Shadow's Gauntlets
-    3092380260, // Mark of the Emperor's Champion
-    3092380261, // Shadow's Mark
-    3099636805, // Greaves of Nohr
-    3108321700, // Penumbral Bond
-    3163683564, // Gunsmith's Devotion Boots
-    3164851950, // Bladesmith's Memory Cloak
-    3168183519, // Turris Shade Greaves
-    3181497704, // Robes of Sekris
-    3285121297, // Equitis Shade Boots
-    3292127944, // Cuirass of the Emperor's Champion
-    3349283422, // Shadow's Mind
-    3359121706, // Mask of Nohr
-    3364682867, // Gauntlets of Nohr
-    3395856235, // Insigne Shade Boots
-    3416932282, // Turris Shade Mark
-    3440648382, // Equitis Shade Cowl
-    3483984579, // Shadow's Vest
-    3497220322, // Cloak of Feltroc
-    3517729518, // Shadow's Vest
-    3518193943, // Penumbral Cloak
-    3530284425, // Wraps of the Emperor's Minister
-    3567761471, // Gunsmith's Devotion Bond
-    3581198350, // Turris Shade Gauntlets
-    3592548938, // Robes of the Fulminator
-    3706457515, // Songbreaker Grips
-    3711700026, // Mask of the Emperor's Agent
-    3711700027, // Helm of the Ace-Defiant
-    3719175804, // Equitis Shade Grips
-    3720446265, // Equitis Shade Cloak
-    3759659288, // Shadow's Plate
-    3763332443, // Shadow's Bond
-    3831484112, // Mark of Nohr
-    3842934816, // Wraps of Sekris
-    3853397100, // Boots of the Emperor's Agent
-    3867160430, // Insigne Shade Bond
-    3950028838, // Cloak of the Emperor's Agent
-    3950028839, // Shadow's Cloak
-    3964287245, // Wraps of Sekris
-    3984534842, // Shadow's Cloak
-    3992358137, // Bladesmith's Memory Grips
-    4125324487, // Bulletsmith's Ire Gauntlets
-    4135228483, // Turris Shade Plate
-    4152814806, // Shadow's Greaves
-    4229161783, // Boots of Feltroc
-    4238134294, // Gunsmith's Devotion Robes
-    4247935492, // Equitis Shade Cloak
-    4251770244, // Boots of the Ace-Defiant
-    4251770245, // Boots of the Emperor's Agent
-  ],
-  deepstonecrypt: [],
   deluxe: [
+    1952218242, // Sequence Flourish
     2683682447, // Traitor's Fate
   ],
   do: [
@@ -823,6 +660,7 @@ const missingSources: { [key: string]: number[] } = {
     185695659, // Reverie Dawn Hood
     188778964, // Reverie Dawn Boots
     344548395, // Reverie Dawn Strides
+    871900124, // Retold Tale
     934704429, // Reverie Dawn Plate
     998096007, // Reverie Dawn Hood
     1452333832, // Reverie Dawn Boots
@@ -912,7 +750,6 @@ const missingSources: { [key: string]: number[] } = {
     4188366993, // Ancient Apocalypse Robes
     4255727106, // Ancient Apocalypse Hood
   ],
-  dsc: [],
   duality: [
     145651147, // Deep Explorer Vest
     420895300, // Deep Explorer Mark
@@ -931,36 +768,82 @@ const missingSources: { [key: string]: number[] } = {
     4047213660, // Deep Explorer Mask
   ],
   dungeon: [
+    51786498, // Vest of the Taken King
     145651147, // Deep Explorer Vest
     286271818, // Twisting Echo Cloak
     399065241, // Descending Echo Greaves
     420895300, // Deep Explorer Mark
+    436695703, // TM-Cogburn Custom Plate
+    498918879, // TM-Earp Custom Grips
+    557092665, // Dark Age Cloak
     587312237, // Twisting Echo Grips
+    632989816, // Dark Age Gauntlets
+    638836294, // Plate of the Taken King
+    708921139, // TM-Cogburn Custom Legguards
+    767306222, // Grasps of the Taken King
+    806004493, // Dark Age Gloves
     833653807, // Twisting Echo Strides
+    837865641, // Vestment of the Taken King
+    851401651, // Dark Age Overcoat
+    956827695, // Mark of the Taken King
     1148597205, // Deep Explorer Grasps
+    1349399252, // TM-Earp Custom Cloaked Stetson
+    1476803535, // Dark Age Legbraces
+    1664757090, // Gauntlets of the Taken King
     1756483796, // Twisting Echo Mask
+    1913823311, // Gloves of the Taken King
+    1933599476, // Dark Age Visor
     1951355667, // Twisting Echo Vest
     2057955626, // Deep Explorer Vestments
     2244604734, // Corrupting Echo Gloves
+    2341879253, // TM-Moss Custom Bond
+    2426502022, // Dark Age Strides
+    2488323569, // Boots of the Taken King
     2499351855, // Deep Explorer Gauntlets
+    2565015142, // TM-Cogburn Custom Mark
+    2618168932, // Bond of the Taken King
+    2643850526, // Hood of the Taken King
     2649394513, // Deep Explorer Greaves
+    2662590925, // Dark Age Mark
     2663987096, // Corrupting Echo Boots
     2694773307, // Deep Explorer Bond
     2724719415, // Deep Explorer Strides
+    2771011469, // Dark Age Mask
     2797334754, // Deep Explorer Cloak
     2819810688, // Deep Explorer Boots
+    2820604007, // Mask of the Taken King
+    2850384360, // Strides of the Taken King
     2885497847, // Descending Echo Gauntlets
     2935559305, // Deep Explorer Plate
+    2963224754, // Dark Age Sabatons
     3048458482, // Corrupting Echo Robes
+    3056827626, // Dark Age Bond
     3171090615, // Corrupting Echo Cover
     3260781446, // Deep Explorer Gloves
     3267969345, // Descending Echo Cage
     3270955774, // Deep Explorer Helmet
     3326914239, // Deep Explorer Hood
+    3344225390, // TM-Earp Custom Hood
+    3423574140, // Dark Age Grips
+    3511740432, // TM-Moss Custom Gloves
+    3570749779, // Cloak of the Taken King
+    3683772388, // Dark Age Harness
     3685276035, // Corrupting Echo Bond
+    3708902812, // Greaves of the Taken King
+    3715136417, // TM-Earp Custom Chaps
+    3735435664, // Dark Age Chestrig
+    3870375786, // TM-Moss Custom Pants
     3871537958, // Descending Echo Helm
+    3933500353, // TM-Cogburn Custom Gauntlets
+    3946384952, // TM-Moss Custom Duster
+    4039955353, // TM-Moss Custom Hat
     4047213660, // Deep Explorer Mask
     4050474396, // Descending Echo Mark
+    4090037601, // Dark Age Helm
+    4097972038, // A Sudden Death
+    4130276947, // Helm of the Taken King
+    4177293424, // TM-Cogburn Custom Cover
+    4288623897, // TM-Earp Custom Vest
   ],
   edz: [
     10307688, // Wildwood Plate
@@ -985,7 +868,6 @@ const missingSources: { [key: string]: number[] } = {
     3973359167, // Wildwood Mask
     4051755349, // Wildwood Boots
   ],
-  enclave: [],
   eow: [
     239489770, // Bond of Sekris
     253344425, // Mask of Feltroc
@@ -1018,8 +900,6 @@ const missingSources: { [key: string]: number[] } = {
     3964287245, // Wraps of Sekris
     4229161783, // Boots of Feltroc
   ],
-  ep: [],
-  europa: [],
   events: [
     116784191, // Solstice Boots (Renewed)
     140842223, // Solstice Mask (Drained)
@@ -1035,11 +915,13 @@ const missingSources: { [key: string]: number[] } = {
     419435523, // Inaugural Revelry Grips
     450844637, // Solstice Robes (Majestic)
     492834021, // Inaugural Revelry Hood
+    495940989, // Avalanche
     518930465, // Solstice Grasps (Rekindled)
     531005896, // Solstice Cloak (Resplendent)
     540653483, // Solstice Vest (Scorched)
     574167778, // Solstice Gauntlets (Drained)
     574790717, // Solstice Gloves (Drained)
+    586671776, // Something New
     627596132, // Solstice Hood (Drained)
     677939288, // Solstice Helm (Scorched)
     721146704, // Solstice Mask (Rekindled)
@@ -1051,6 +933,7 @@ const missingSources: { [key: string]: number[] } = {
     1141639721, // Solstice Gauntlets (Scorched)
     1229961870, // Solstice Vest (Renewed)
     1273510836, // Inaugural Revelry Wraps
+    1280894514, // Mechabre
     1288683596, // Solstice Plate (Majestic)
     1341471164, // Solstice Mask (Scorched)
     1361620030, // Solstice Mark (Scorched)
@@ -1080,6 +963,8 @@ const missingSources: { [key: string]: number[] } = {
     2150778206, // Solstice Gloves (Scorched)
     2155928170, // Solstice Mark (Rekindled)
     2156817213, // Solstice Cloak (Majestic)
+    2223901117, // Allstar Vector
+    2261046232, // Jurassic Green
     2287277682, // Solstice Robes (Rekindled)
     2291082292, // Solstice Gauntlets (Majestic)
     2328435454, // Inaugural Revelry Helm
@@ -1099,6 +984,8 @@ const missingSources: { [key: string]: number[] } = {
     2770157746, // Solstice Mask (Resplendent)
     2777913564, // Warm Winter Cloak
     2805101184, // Solstice Vest (Majestic)
+    2812100428, // Stay Frosty
+    2814093983, // Cold Front
     2824302184, // Solstice Robes (Resplendent)
     2837295684, // Inaugural Revelry Mark
     2877046370, // Solstice Strides (Majestic)
@@ -1113,9 +1000,14 @@ const missingSources: { [key: string]: number[] } = {
     3159052337, // Solstice Mask (Majestic)
     3192336962, // Solstice Cloak (Scorched)
     3236510875, // Solstice Grasps (Resplendent)
+    3240434620, // Something New
+    3400256755, // Zephyr
+    3559361670, // The Title
+    3573686365, // Glacioclasm
     3611487543, // Solstice Hood (Rekindled)
     3685996623, // Solstice Greaves (Rekindled)
     3748622249, // Solstice Hood (Resplendent)
+    3829285960, // Horror Story
     3892841518, // Solstice Gauntlets (Renewed)
     3929403535, // Solstice Gauntlets (Resplendent)
     3932814032, // Solstice Strides (Drained)
@@ -1125,8 +1017,10 @@ const missingSources: { [key: string]: number[] } = {
     3987442049, // Solstice Mark (Majestic)
     4075522049, // Inaugural Revelry Bond
     4100029812, // Solstice Strides (Renewed)
+    4106757302, // Crowning Duologue
     4128297107, // Solstice Mark (Renewed)
     4142792564, // Solstice Helm (Rekindled)
+    4169225313, // Compass Rose
     4245469491, // Solstice Plate (Rekindled)
     4272367383, // Solstice Strides (Scorched)
   ],
@@ -1136,12 +1030,14 @@ const missingSources: { [key: string]: number[] } = {
     167651268, // Crimson Passion
     269339124, // Dawning Hope
     599687980, // Purple Dawning Lanterns
+    639457414, // Necrosis
     691914261, // Silver Dawning Lanterns
     706111909, // Hood of Optimacy
     710937567, // Legs of Optimacy
     921357268, // Winterhart Plate
     989291706, // Cloak of Optimacy
     1051903593, // Dawning Bauble Shell
+    1126785375, // Great White
     1135293055, // Plate of Optimacy
     1290784012, // Winterhart Gauntlets
     1397284432, // Jasper Dawn Shell
@@ -1169,6 +1065,7 @@ const missingSources: { [key: string]: number[] } = {
     2806805902, // Mark of Optimacy
     2828252061, // Winterhart Helm
     2998296658, // Ice Ball Effects
+    3086696388, // Itsy-Bitsy Spider
     3161524490, // Rupture
     3168164098, // Yellow Dawning Lanterns
     3177119978, // Carmina Commencing
@@ -1182,7 +1079,6 @@ const missingSources: { [key: string]: number[] } = {
     3947596543, // Green Dawning Lanterns
     4059030097, // Winterhart Mask
   ],
-  evidenceboard: [],
   fwc: [
     680327840, // Simulator Greaves
     807866445, // Simulator Gloves
@@ -1401,6 +1297,74 @@ const missingSources: { [key: string]: number[] } = {
     3939809874, // Plate of Transcendence
     4177973942, // Vest of Transcendence
   ],
+  gardenofsalvation: [
+    11974904, // Greaves of Ascendancy
+    281660259, // Temptation's Mark
+    519078295, // Helm of Righteousness
+    557676195, // Cowl of Righteousness
+    1653741426, // Grips of Exaltation
+    2015894615, // Gloves of Exaltation
+    2054979724, // Strides of Ascendancy
+    2320830625, // Robes of Transcendence
+    3001934726, // Mask of Righteousness
+    3103335676, // Temptation's Bond
+    3549177695, // Cloak of Temptation
+    3824429433, // Boots of Ascendancy
+    3887559710, // Gauntlets of Exaltation
+    3939809874, // Plate of Transcendence
+    4177973942, // Vest of Transcendence
+  ],
+  ghostsofthedeep: [
+    51786498, // Vest of the Taken King
+    638836294, // Plate of the Taken King
+    767306222, // Grasps of the Taken King
+    837865641, // Vestment of the Taken King
+    956827695, // Mark of the Taken King
+    1664757090, // Gauntlets of the Taken King
+    1913823311, // Gloves of the Taken King
+    2488323569, // Boots of the Taken King
+    2618168932, // Bond of the Taken King
+    2643850526, // Hood of the Taken King
+    2820604007, // Mask of the Taken King
+    2850384360, // Strides of the Taken King
+    3570749779, // Cloak of the Taken King
+    3708902812, // Greaves of the Taken King
+    4130276947, // Helm of the Taken King
+  ],
+  gos: [
+    11974904, // Greaves of Ascendancy
+    281660259, // Temptation's Mark
+    519078295, // Helm of Righteousness
+    557676195, // Cowl of Righteousness
+    1653741426, // Grips of Exaltation
+    2015894615, // Gloves of Exaltation
+    2054979724, // Strides of Ascendancy
+    2320830625, // Robes of Transcendence
+    3001934726, // Mask of Righteousness
+    3103335676, // Temptation's Bond
+    3549177695, // Cloak of Temptation
+    3824429433, // Boots of Ascendancy
+    3887559710, // Gauntlets of Exaltation
+    3939809874, // Plate of Transcendence
+    4177973942, // Vest of Transcendence
+  ],
+  gotd: [
+    51786498, // Vest of the Taken King
+    638836294, // Plate of the Taken King
+    767306222, // Grasps of the Taken King
+    837865641, // Vestment of the Taken King
+    956827695, // Mark of the Taken King
+    1664757090, // Gauntlets of the Taken King
+    1913823311, // Gloves of the Taken King
+    2488323569, // Boots of the Taken King
+    2618168932, // Bond of the Taken King
+    2643850526, // Hood of the Taken King
+    2820604007, // Mask of the Taken King
+    2850384360, // Strides of the Taken King
+    3570749779, // Cloak of the Taken King
+    3708902812, // Greaves of the Taken King
+    4130276947, // Helm of the Taken King
+  ],
   grasp: [
     286271818, // Twisting Echo Cloak
     399065241, // Descending Echo Greaves
@@ -1418,13 +1382,9 @@ const missingSources: { [key: string]: number[] } = {
     3871537958, // Descending Echo Helm
     4050474396, // Descending Echo Mark
   ],
-  gunsmith: [
-    1324233016, // Sword Scavenger
-    1324233019, // Scout Rifle Loader
-    2187989977, // Machine Gun Scavenger
+  haunted: [
+    3864896927, // Nightmare Harvester
   ],
-  harbinger: [],
-  haunted: [],
   ikora: [
     89175653, // Noble Constant Mark
     185326970, // Noble Constant Type 2
@@ -1455,6 +1415,15 @@ const missingSources: { [key: string]: number[] } = {
     4225579453, // Noble Constant Type 2
     4285708584, // Ego Talon Bond
   ],
+  intothelight: [
+    211732170, // Hammerhead
+    243425374, // Falling Guillotine
+    570866107, // Succession
+    2228325504, // Edge Transit
+    2499720827, // Midnight Coup
+    3757612024, // Luna's Howl
+    3851176026, // Elsie's Rifle
+  ],
   io: [
     886128573, // Mindbreaker Boots
     2317191363, // Mindbreaker Boots
@@ -1484,9 +1453,11 @@ const missingSources: { [key: string]: number[] } = {
     479917491, // Mantle of Efrideet
     481390023, // Iron Truage Casque
     485774636, // Iron Remembrance Helm
+    487361141, // Gunnora's Axe
     500363457, // Iron Symmachy Grips
     510020159, // Iron Fellowship Strides
     511170376, // Iron Truage Boots
+    540880995, // Dark Decider
     559176540, // Iron Symmachy Gloves
     561808153, // Mantle of Efrideet
     691332172, // Iron Truage Gauntlets
@@ -1501,6 +1472,7 @@ const missingSources: { [key: string]: number[] } = {
     808693674, // Iron Symmachy Mark
     831464034, // Iron Truage Vest
     863444264, // Iron Will Gloves
+    888872889, // Point of the Stag
     892360677, // Iron Fellowship Helm
     935677805, // Iron Truage Casque
     957732971, // Iron Symmachy Grips
@@ -1514,6 +1486,7 @@ const missingSources: { [key: string]: number[] } = {
     1098138990, // Iron Will Mask
     1105558158, // Iron Truage Helm
     1127757814, // Iron Symmachy Helm
+    1161561386, // The Guiding Sight
     1164755828, // Iron Fellowship Bond
     1166260237, // Iron Truage Vestments
     1173846338, // Iron Fellowship Bond
@@ -1540,6 +1513,7 @@ const missingSources: { [key: string]: number[] } = {
     1496224967, // Iron Truage Casque
     1498852482, // Iron Will Steps
     1526005320, // Iron Truage Boots
+    1532276803, // Allied Demand
     1570751539, // Iron Symmachy Strides
     1601698634, // Iron Fellowship Grips
     1604601714, // Iron Truage Vestments
@@ -1549,6 +1523,7 @@ const missingSources: { [key: string]: number[] } = {
     1673037492, // Iron Fellowship Gauntlets
     1675022998, // Iron Remembrance Helm
     1717896437, // Iron Truage Legs
+    1764868900, // Riiswalker
     1804445917, // Iron Truage Helm
     1822989604, // Iron Symmachy Gloves
     1854612346, // Iron Truage Hood
@@ -1560,12 +1535,14 @@ const missingSources: { [key: string]: number[] } = {
     1944853984, // Iron Remembrance Casque
     1960776126, // Iron Fellowship Greaves
     1990315366, // Iron Symmachy Cloak
+    1999697514, // The Wizened Rebuke
     2017059966, // Iron Fellowship Helm
     2049490557, // Iron Symmachy Strides
     2054377692, // Iron Truage Grips
     2055774222, // Iron Fellowship Hood
     2058205265, // Iron Truage Gloves
     2083136519, // Iron Fellowship Cloak
+    2189073092, // Lethal Abundance
     2205315921, // Iron Will Hood
     2234855160, // Iron Symmachy Cloak
     2241419267, // Timur's Iron Bond
@@ -1580,6 +1557,7 @@ const missingSources: { [key: string]: number[] } = {
     2414679508, // Iron Will Cloak
     2426788417, // Iron Fellowship Boots
     2455992644, // Iron Remembrance Legs
+    2488587246, // The Hero's Burden
     2500327265, // Radegast's Iron Sash
     2536633781, // Iron Will Plate
     2547799775, // Iron Will Sleeves
@@ -1615,6 +1593,7 @@ const missingSources: { [key: string]: number[] } = {
     3112906149, // Iron Symmachy Vest
     3115791898, // Iron Remembrance Legs
     3147146325, // Iron Symmachy Hood
+    3169616514, // Bite of the Fox
     3292445816, // Iron Truage Casque
     3300129601, // Iron Truage Gloves
     3308875113, // Iron Remembrance Grips
@@ -1656,6 +1635,7 @@ const missingSources: { [key: string]: number[] } = {
     3972479219, // Iron Fellowship Hood
     3974682334, // Iron Remembrance Vestments
     3976616421, // Iron Remembrance Gauntlets
+    4009352833, // Roar of the Bear
     4010793371, // Iron Remembrance Grips
     4019071337, // Radegast's Iron Sash
     4041069824, // Timur's Iron Bond
@@ -1672,14 +1652,25 @@ const missingSources: { [key: string]: number[] } = {
     4211068696, // Iron Truage Legs
     4248834293, // Iron Remembrance Vest
   ],
-  kingsfall: [],
+  itl: [
+    211732170, // Hammerhead
+    243425374, // Falling Guillotine
+    570866107, // Succession
+    2228325504, // Edge Transit
+    2499720827, // Midnight Coup
+    3757612024, // Luna's Howl
+    3851176026, // Elsie's Rifle
+  ],
   lastwish: [
     4968701, // Greaves of the Great Hunt
     16387641, // Mark of the Great Hunt
     49280456, // Gloves of the Great Hunt
     65929376, // Gauntlets of the Great Hunt
+    70083888, // Nation of Beasts
     146275556, // Vest of the Great Hunt
     196235132, // Grips of the Great Hunt
+    424291879, // Age-Old Bond
+    501329015, // Chattering Bone
     576683388, // Gauntlets of the Great Hunt
     726265506, // Boots of the Great Hunt
     776723133, // Robes of the Great Hunt
@@ -1697,12 +1688,14 @@ const missingSources: { [key: string]: number[] } = {
     1477271933, // Bond of the Great Hunt
     1646520469, // Cloak of the Great Hunt
     1656835365, // Plate of the Great Hunt
+    1851777734, // Apex Predator
     2112541750, // Cloak of the Great Hunt
     2274520361, // Helm of the Great Hunt
     2280287728, // Bond of the Great Hunt
     2550116544, // Robes of the Great Hunt
     2598685593, // Gloves of the Great Hunt
     2868042232, // Vest of the Great Hunt
+    2884596447, // The Supremacy
     2950533187, // Strides of the Great Hunt
     3055836250, // Greaves of the Great Hunt
     3119383537, // Grips of the Great Hunt
@@ -1710,14 +1703,17 @@ const missingSources: { [key: string]: number[] } = {
     3208178411, // Gauntlets of the Great Hunt
     3227674085, // Boots of the Great Hunt
     3251351304, // Hood of the Great Hunt
+    3388655311, // Tyranny of Heaven
     3445296383, // Robes of the Great Hunt
     3445582154, // Hood of the Great Hunt
     3492720019, // Gloves of the Great Hunt
     3494130310, // Strides of the Great Hunt
+    3591141932, // Techeun Force
     3614211816, // Plate of the Great Hunt
     3838639757, // Mask of the Great Hunt
     3868637058, // Helm of the Great Hunt
     3874578566, // Greaves of the Great Hunt
+    3885259140, // Transfiguration
     4219088013, // Helm of the Great Hunt
   ],
   legendaryengram: [
@@ -1803,7 +1799,6 @@ const missingSources: { [key: string]: number[] } = {
     1293868684, // Insight Unyielding Helm
     1295776817, // Insight Rover Grips
     1301696822, // Mimetic Savior Greaves
-    1324233017, // Machine Gun Holster
     1330107298, // Thorium Holt Robes
     1330542168, // Tangled Web Bond
     1348658294, // Clandestine Maneuvers
@@ -1862,7 +1857,6 @@ const missingSources: { [key: string]: number[] } = {
     2159363321, // Be Thy Guide
     2173858802, // Prodigal Cloak
     2185500219, // Insight Unyielding Plate
-    2187989980, // Glaive Loader
     2193432605, // Mimetic Savior Helm
     2205604183, // Dead End Cure 2.1
     2206284939, // Tangled Web Strides
@@ -1923,7 +1917,6 @@ const missingSources: { [key: string]: number[] } = {
     2905154661, // Insight Vikti Hood
     2924984456, // Thorium Holt Boots
     2932121030, // Devastation Complex
-    2979161761, // Hand Cannon Holster
     2982412348, // Tangled Web Helm
     2996649640, // Philomath Boots
     3018268196, // Insight Vikti Boots
@@ -2058,13 +2051,64 @@ const missingSources: { [key: string]: number[] } = {
     4251770245, // Boots of the Emperor's Agent
   ],
   limited: [
+    1952218242, // Sequence Flourish
     2683682447, // Traitor's Fate
   ],
-  lost: [],
-  lostsectors: [],
-  mars: [],
-  menagerie: [],
-  mercury: [],
+  lw: [
+    4968701, // Greaves of the Great Hunt
+    16387641, // Mark of the Great Hunt
+    49280456, // Gloves of the Great Hunt
+    65929376, // Gauntlets of the Great Hunt
+    70083888, // Nation of Beasts
+    146275556, // Vest of the Great Hunt
+    196235132, // Grips of the Great Hunt
+    424291879, // Age-Old Bond
+    501329015, // Chattering Bone
+    576683388, // Gauntlets of the Great Hunt
+    726265506, // Boots of the Great Hunt
+    776723133, // Robes of the Great Hunt
+    778784376, // Mark of the Great Hunt
+    821841934, // Bond of the Great Hunt
+    972689703, // Vest of the Great Hunt
+    1021341893, // Mark of the Great Hunt
+    1127835600, // Grips of the Great Hunt
+    1190016345, // Mask of the Great Hunt
+    1195800715, // Boots of the Great Hunt
+    1258342944, // Mask of the Great Hunt
+    1314563129, // Cloak of the Great Hunt
+    1432728945, // Hood of the Great Hunt
+    1444894250, // Strides of the Great Hunt
+    1477271933, // Bond of the Great Hunt
+    1646520469, // Cloak of the Great Hunt
+    1656835365, // Plate of the Great Hunt
+    1851777734, // Apex Predator
+    2112541750, // Cloak of the Great Hunt
+    2274520361, // Helm of the Great Hunt
+    2280287728, // Bond of the Great Hunt
+    2550116544, // Robes of the Great Hunt
+    2598685593, // Gloves of the Great Hunt
+    2868042232, // Vest of the Great Hunt
+    2884596447, // The Supremacy
+    2950533187, // Strides of the Great Hunt
+    3055836250, // Greaves of the Great Hunt
+    3119383537, // Grips of the Great Hunt
+    3143067364, // Plate of the Great Hunt
+    3208178411, // Gauntlets of the Great Hunt
+    3227674085, // Boots of the Great Hunt
+    3251351304, // Hood of the Great Hunt
+    3388655311, // Tyranny of Heaven
+    3445296383, // Robes of the Great Hunt
+    3445582154, // Hood of the Great Hunt
+    3492720019, // Gloves of the Great Hunt
+    3494130310, // Strides of the Great Hunt
+    3591141932, // Techeun Force
+    3614211816, // Plate of the Great Hunt
+    3838639757, // Mask of the Great Hunt
+    3868637058, // Helm of the Great Hunt
+    3874578566, // Greaves of the Great Hunt
+    3885259140, // Transfiguration
+    4219088013, // Helm of the Great Hunt
+  ],
   moon: [
     193805725, // Dreambane Cloak
     272413517, // Dreambane Helm
@@ -2150,8 +2194,33 @@ const missingSources: { [key: string]: number[] } = {
     4060742749, // Exodus Down Mask
     4130486121, // Exodus Down Mask
   ],
-  nightfall: [],
-  nightmare: [],
+  nightfall: [
+    40394833, // The Militia's Birthright
+    47772649, // THE SWARM
+    192784503, // Pre Astyanax IV
+    205225492, // Hung Jury SR4
+    267089201, // Warden's Law (Adept)
+    496556698, // Pre Astyanax IV (Adept)
+    555148853, // Wendigo GL3 (Adept)
+    672957262, // Undercurrent (Adept)
+    681067419, // Hung Jury SR4 (Adept)
+    772231794, // Hung Jury SR4
+    852228780, // Uzume RR4 (Adept)
+    912150785, // Mindbender's Ambition (Adept)
+    1094005544, // Mindbender's Ambition
+    1151688091, // Undercurrent
+    1821529912, // Warden's Law
+    1891996599, // Uzume RR4 (Adept)
+    2065081837, // Uzume RR4
+    2147010335, // Shadow Price (Adept)
+    2378101424, // The Militia's Birthright (Adept)
+    2450917538, // Uzume RR4
+    2633186522, // Shadow Price
+    3183283212, // Wendigo GL3
+    3836861464, // THE SWARM (Adept)
+    4074251943, // Hung Jury SR4 (Adept)
+    4281371574, // Hung Jury SR4
+  ],
   nm: [
     25798127, // Sovereign Grips
     106359434, // Coronation Mark
@@ -2169,12 +2238,17 @@ const missingSources: { [key: string]: number[] } = {
     3323316553, // Sovereign Vest
     4083497488, // Sovereign Gloves
   ],
-  pit: [],
-  plunder: [],
-  presage: [],
-  prestige: [],
-  prophecy: [],
-  psiops: [],
+  plunder: [
+    912150785, // Mindbender's Ambition (Adept)
+    2378101424, // The Militia's Birthright (Adept)
+    2871264750, // Skeleton Key
+  ],
+  prophecy: [
+    4097972038, // A Sudden Death
+  ],
+  psiops: [
+    3358687360, // Synaptic Spear
+  ],
   raid: [
     4968701, // Greaves of the Great Hunt
     11974904, // Greaves of Ascendancy
@@ -2185,6 +2259,7 @@ const missingSources: { [key: string]: number[] } = {
     64543268, // Boots of the Emperor's Minister
     64543269, // Boots of the Fulminator
     65929376, // Gauntlets of the Great Hunt
+    70083888, // Nation of Beasts
     146275556, // Vest of the Great Hunt
     196235132, // Grips of the Great Hunt
     223783885, // Insigne Shade Bond
@@ -2204,8 +2279,10 @@ const missingSources: { [key: string]: number[] } = {
     383742277, // Cloak of Feltroc
     388999052, // Bulletsmith's Ire Mark
     407863747, // Vest of the Ace-Defiant
+    424291879, // Age-Old Bond
     455108040, // Helm of the Emperor's Champion
     455108041, // Mask of Rull
+    501329015, // Chattering Bone
     503773817, // Insigne Shade Gloves
     519078295, // Helm of Righteousness
     548581042, // Insigne Shade Boots
@@ -2271,6 +2348,7 @@ const missingSources: { [key: string]: number[] } = {
     1675393889, // Insigne Shade Cover
     1756558505, // Mask of Sekris
     1793869832, // Turris Shade Greaves
+    1851777734, // Apex Predator
     1862963733, // Shadow's Plate
     1876645653, // Chassis of Rull
     1879942843, // Gauntlets of Rull
@@ -2303,6 +2381,7 @@ const missingSources: { [key: string]: number[] } = {
     2329031091, // Robes of Sekris
     2339720736, // Grips of Feltroc
     2369496221, // Plate of Nohr
+    2480074702, // Forbearance
     2513313400, // Insigne Shade Gloves
     2530113265, // Bulletsmith's Ire Plate
     2537874394, // Boots of Sekris
@@ -2323,6 +2402,7 @@ const missingSources: { [key: string]: number[] } = {
     2769298993, // Shadow's Boots
     2868042232, // Vest of the Great Hunt
     2878130185, // Bulletsmith's Ire Greaves
+    2884596447, // The Supremacy
     2904930850, // Turris Shade Plate
     2913992255, // Helm of the Emperor's Champion
     2921334134, // Bulletsmith's Ire Helm
@@ -2353,6 +2433,7 @@ const missingSources: { [key: string]: number[] } = {
     3349283422, // Shadow's Mind
     3359121706, // Mask of Nohr
     3364682867, // Gauntlets of Nohr
+    3388655311, // Tyranny of Heaven
     3395856235, // Insigne Shade Boots
     3416932282, // Turris Shade Mark
     3440648382, // Equitis Shade Cowl
@@ -2368,6 +2449,7 @@ const missingSources: { [key: string]: number[] } = {
     3549177695, // Cloak of Temptation
     3567761471, // Gunsmith's Devotion Bond
     3581198350, // Turris Shade Gauntlets
+    3591141932, // Techeun Force
     3592548938, // Robes of the Fulminator
     3614211816, // Plate of the Great Hunt
     3711700026, // Mask of the Emperor's Agent
@@ -2384,6 +2466,7 @@ const missingSources: { [key: string]: number[] } = {
     3867160430, // Insigne Shade Bond
     3868637058, // Helm of the Great Hunt
     3874578566, // Greaves of the Great Hunt
+    3885259140, // Transfiguration
     3887559710, // Gauntlets of Exaltation
     3939809874, // Plate of Transcendence
     3950028838, // Cloak of the Emperor's Agent
@@ -2402,9 +2485,33 @@ const missingSources: { [key: string]: number[] } = {
     4251770244, // Boots of the Ace-Defiant
     4251770245, // Boots of the Emperor's Agent
   ],
-  rasputin: [],
-  saint14: [],
+  rasputin: [
+    555148853, // Wendigo GL3 (Adept)
+    681067419, // Hung Jury SR4 (Adept)
+    1631448645, // Seraph Cipher
+    4074251943, // Hung Jury SR4 (Adept)
+  ],
+  saint14: [
+    3360014173, // The Lantern of Osiris
+  ],
   scourge: [
+    350056552, // Bladesmith's Memory Mask
+    388999052, // Bulletsmith's Ire Mark
+    1624906371, // Gunsmith's Devotion Crown
+    1917693279, // Bladesmith's Memory Vest
+    2530113265, // Bulletsmith's Ire Plate
+    2589473259, // Bladesmith's Memory Strides
+    2762445138, // Gunsmith's Devotion Gloves
+    2878130185, // Bulletsmith's Ire Greaves
+    2921334134, // Bulletsmith's Ire Helm
+    3163683564, // Gunsmith's Devotion Boots
+    3164851950, // Bladesmith's Memory Cloak
+    3567761471, // Gunsmith's Devotion Bond
+    3992358137, // Bladesmith's Memory Grips
+    4125324487, // Bulletsmith's Ire Gauntlets
+    4238134294, // Gunsmith's Devotion Robes
+  ],
+  scourgeofthepast: [
     350056552, // Bladesmith's Memory Mask
     388999052, // Bulletsmith's Ire Mark
     1624906371, // Gunsmith's Devotion Crown
@@ -2423,16 +2530,26 @@ const missingSources: { [key: string]: number[] } = {
   ],
   seasonpass: [
     1387688628, // The Gate Lord's Eye
+    1631448645, // Seraph Cipher
+    2785855278, // NPA Repulsion Regulator
+    2871264750, // Skeleton Key
+    3358687360, // Synaptic Spear
+    3644991365, // Ascendant Scepter
+    3864896927, // Nightmare Harvester
+    4012642691, // Riptide
   ],
-  servitor: [],
-  shatteredthrone: [],
+  servitor: [
+    3380377210, // Paradrome Cube
+  ],
   shaxx: [
     85800627, // Ankaa Seeker IV
     98331691, // Binary Phoenix Mark
+    120859138, // Phoenix Strife Type 0
     185853176, // Wing Discipline
     252414402, // Swordflight 4.1
     283188616, // Wing Contender
     290136582, // Wing Theorem
+    315615761, // Ankaa Seeker IV
     327530279, // Wing Theorem
     328902054, // Swordflight 4.1
     356269375, // Wing Theorem
@@ -2443,6 +2560,7 @@ const missingSources: { [key: string]: number[] } = {
     468899627, // Binary Phoenix Mark
     530558102, // Phoenix Strife Type 0
     636679949, // Ankaa Seeker IV
+    657400178, // Swordflight 4.1
     670877864, // Binary Phoenix Mark
     727838174, // Swordflight 4.1
     744199039, // Wing Contender
@@ -2453,6 +2571,8 @@ const missingSources: { [key: string]: number[] } = {
     876608500, // Ankaa Seeker IV
     920187221, // Wing Discipline
     929917162, // Wing Theorem
+    944242985, // Ankaa Seeker IV
+    987343638, // Ankaa Seeker IV
     997903134, // Wing Theorem
     1036467370, // Wing Theorem
     1062166003, // Wing Contender
@@ -2462,13 +2582,16 @@ const missingSources: { [key: string]: number[] } = {
     1084033161, // Wing Contender
     1127237110, // Wing Contender
     1245115841, // Wing Theorem
+    1294217731, // Binary Phoenix Cloak
     1307478991, // Ankaa Seeker IV
+    1330581478, // Phoenix Strife Type 0
     1333087155, // Ankaa Seeker IV
     1464207979, // Wing Discipline
     1467590642, // Binary Phoenix Bond
     1484937602, // Phoenix Strife Type 0
     1548928853, // Phoenix Strife Type 0
     1571781304, // Swordflight 4.1
+    1648675919, // Binary Phoenix Mark
     1654427223, // Swordflight 4.1
     1658896287, // Binary Phoenix Cloak
     1673285051, // Wing Theorem
@@ -2478,6 +2601,7 @@ const missingSources: { [key: string]: number[] } = {
     1742940528, // Phoenix Strife Type 0
     1764274932, // Ankaa Seeker IV
     1801625827, // Swordflight 4.1
+    1828358334, // Swordflight 4.1
     1830829330, // Swordflight 4.1
     1838158578, // Binary Phoenix Bond
     1838273186, // Wing Contender
@@ -2487,7 +2611,10 @@ const missingSources: { [key: string]: number[] } = {
     2070517134, // Wing Contender
     2124666626, // Wing Discipline
     2191401041, // Phoenix Strife Type 0
+    2191437287, // Ankaa Seeker IV
+    2206581692, // Phoenix Strife Type 0
     2231762285, // Phoenix Strife Type 0
+    2247740696, // Swordflight 4.1
     2291226602, // Binary Phoenix Bond
     2293476915, // Swordflight 4.1
     2296560252, // Swordflight 4.1
@@ -2499,15 +2626,19 @@ const missingSources: { [key: string]: number[] } = {
     2466453881, // Wing Discipline
     2473130418, // Swordflight 4.1
     2496309431, // Wing Discipline
+    2511045676, // Binary Phoenix Bond
     2525395257, // Wing Theorem
     2543903638, // Phoenix Strife Type 0
     2555965565, // Wing Discipline
+    2627852659, // Phoenix Strife Type 0
     2670393359, // Phoenix Strife Type 0
     2718495762, // Swordflight 4.1
     2727890395, // Ankaa Seeker IV
+    2754844215, // Swordflight 4.1
     2775298636, // Ankaa Seeker IV
     2815422368, // Phoenix Strife Type 0
     3089908066, // Wing Discipline
+    3098328572, // The Recluse
     3098458331, // Ankaa Seeker IV
     3119528729, // Wing Contender
     3140634552, // Swordflight 4.1
@@ -2525,6 +2656,7 @@ const missingSources: { [key: string]: number[] } = {
     3781722107, // Phoenix Strife Type 0
     3818803676, // Wing Discipline
     3839561204, // Wing Theorem
+    4043921923, // The Mountaintop
     4043980813, // Ankaa Seeker IV
     4123918087, // Wing Contender
     4134090375, // Ankaa Seeker IV
@@ -2533,7 +2665,9 @@ const missingSources: { [key: string]: number[] } = {
     4211218181, // Ankaa Seeker IV
     4264096388, // Wing Theorem
   ],
-  shipwright: [],
+  sonar: [
+    2785855278, // NPA Repulsion Regulator
+  ],
   sos: [
     223783885, // Insigne Shade Bond
     503773817, // Insigne Shade Gloves
@@ -2565,6 +2699,89 @@ const missingSources: { [key: string]: number[] } = {
     3867160430, // Insigne Shade Bond
     4135228483, // Turris Shade Plate
     4247935492, // Equitis Shade Cloak
+  ],
+  sotp: [
+    350056552, // Bladesmith's Memory Mask
+    388999052, // Bulletsmith's Ire Mark
+    1624906371, // Gunsmith's Devotion Crown
+    1917693279, // Bladesmith's Memory Vest
+    2530113265, // Bulletsmith's Ire Plate
+    2589473259, // Bladesmith's Memory Strides
+    2762445138, // Gunsmith's Devotion Gloves
+    2878130185, // Bulletsmith's Ire Greaves
+    2921334134, // Bulletsmith's Ire Helm
+    3163683564, // Gunsmith's Devotion Boots
+    3164851950, // Bladesmith's Memory Cloak
+    3567761471, // Gunsmith's Devotion Bond
+    3992358137, // Bladesmith's Memory Grips
+    4125324487, // Bulletsmith's Ire Gauntlets
+    4238134294, // Gunsmith's Devotion Robes
+  ],
+  sotw: [
+    436695703, // TM-Cogburn Custom Plate
+    498918879, // TM-Earp Custom Grips
+    708921139, // TM-Cogburn Custom Legguards
+    1349399252, // TM-Earp Custom Cloaked Stetson
+    2341879253, // TM-Moss Custom Bond
+    2565015142, // TM-Cogburn Custom Mark
+    3344225390, // TM-Earp Custom Hood
+    3511740432, // TM-Moss Custom Gloves
+    3715136417, // TM-Earp Custom Chaps
+    3870375786, // TM-Moss Custom Pants
+    3933500353, // TM-Cogburn Custom Gauntlets
+    3946384952, // TM-Moss Custom Duster
+    4039955353, // TM-Moss Custom Hat
+    4177293424, // TM-Cogburn Custom Cover
+    4288623897, // TM-Earp Custom Vest
+  ],
+  spireofstars: [
+    223783885, // Insigne Shade Bond
+    503773817, // Insigne Shade Gloves
+    548581042, // Insigne Shade Boots
+    802557885, // Turris Shade Gauntlets
+    855363300, // Turris Shade Helm
+    1156439528, // Insigne Shade Cover
+    1296628624, // Insigne Shade Robes
+    1339632007, // Turris Shade Helm
+    1675393889, // Insigne Shade Cover
+    1793869832, // Turris Shade Greaves
+    2128823667, // Turris Shade Mark
+    2513313400, // Insigne Shade Gloves
+    2552158692, // Equitis Shade Rig
+    2620001759, // Insigne Shade Robes
+    2710517999, // Equitis Shade Grips
+    2722103686, // Equitis Shade Boots
+    2904930850, // Turris Shade Plate
+    2933666377, // Equitis Shade Rig
+    3066613133, // Equitis Shade Cowl
+    3168183519, // Turris Shade Greaves
+    3285121297, // Equitis Shade Boots
+    3395856235, // Insigne Shade Boots
+    3416932282, // Turris Shade Mark
+    3440648382, // Equitis Shade Cowl
+    3581198350, // Turris Shade Gauntlets
+    3719175804, // Equitis Shade Grips
+    3720446265, // Equitis Shade Cloak
+    3867160430, // Insigne Shade Bond
+    4135228483, // Turris Shade Plate
+    4247935492, // Equitis Shade Cloak
+  ],
+  spireofthewatcher: [
+    436695703, // TM-Cogburn Custom Plate
+    498918879, // TM-Earp Custom Grips
+    708921139, // TM-Cogburn Custom Legguards
+    1349399252, // TM-Earp Custom Cloaked Stetson
+    2341879253, // TM-Moss Custom Bond
+    2565015142, // TM-Cogburn Custom Mark
+    3344225390, // TM-Earp Custom Hood
+    3511740432, // TM-Moss Custom Gloves
+    3715136417, // TM-Earp Custom Chaps
+    3870375786, // TM-Moss Custom Pants
+    3933500353, // TM-Cogburn Custom Gauntlets
+    3946384952, // TM-Moss Custom Duster
+    4039955353, // TM-Moss Custom Hat
+    4177293424, // TM-Cogburn Custom Cover
+    4288623897, // TM-Earp Custom Vest
   ],
   strikes: [
     24244626, // Mark of Shelter
@@ -2645,7 +2862,6 @@ const missingSources: { [key: string]: number[] } = {
     4138296191, // The Shelter in Place
     4288492921, // Vigil of Heroes
   ],
-  sundial: [],
   tangled: [
     177829853, // Scatterhorn Bond
     218523139, // Scatterhorn Grasps
@@ -2655,6 +2871,7 @@ const missingSources: { [key: string]: number[] } = {
     699589438, // Scatterhorn Boots
     902989307, // Scorned Baron Vest
     1069453608, // Scatterhorn Wraps
+    1094005544, // Mindbender's Ambition
     1250571424, // Scatterhorn Robe
     1347463276, // Scatterhorn Mark
     1349281425, // Scorned Baron Plate
@@ -2690,13 +2907,13 @@ const missingSources: { [key: string]: number[] } = {
     4167605324, // Scatterhorn Robe
     4245441464, // Scorned Baron Robes
   ],
-  throneworld: [],
   titan: [
     1701005142, // Songbreaker Gloves
     2486041713, // Songbreaker Gauntlets
     3706457515, // Songbreaker Grips
   ],
   trials: [
+    2307365, // The Inquisitor (Adept)
     72827962, // Focusing Robes
     142864314, // Bond of the Exile
     150551028, // Boots of the Exile
@@ -2705,8 +2922,10 @@ const missingSources: { [key: string]: number[] } = {
     421771594, // Cloak Relentless
     442736573, // Gloves of the Exile
     495541988, // Hood of the Exile
+    532746994, // Astral Horizon (Adept)
     571925067, // Cover of the Exile
     686607149, // Focusing Cowl
+    711889599, // Whistler's Whim (Adept)
     773318267, // Floating Vest
     784751927, // Annihilating Plate
     861160515, // Robe of the Exile
@@ -2714,27 +2933,77 @@ const missingSources: { [key: string]: number[] } = {
     945907383, // Floating Grips
     1164471069, // Helm of the Exile
     1193489623, // Cloak of the Exile
+    1401300690, // Eye of Sol
+    1526650446, // Trials Engram
+    1574601402, // Whistler's Whim
+    1697682876, // Astral Horizon
     1929400866, // Annihilating Helm
+    2059255495, // Eye of Sol (Adept)
     2158289681, // Floating Boots
+    2185327324, // The Inquisitor
+    2421180981, // Incisor (Adept)
     2579999316, // Plate of the Exile
+    2759251821, // Unwavering Duty (Adept)
     2764588986, // Grips of the Exile
     2808362207, // Legs of the Exile
     3025466099, // Annihilating Guard
+    3102421004, // Exalted Truth
     3127319342, // Floating Cowl
     3149072083, // Bond Relentless
     3365406121, // Mark of the Exile
     3426704397, // Annihilating Greaves
+    3624844116, // Unwavering Duty
+    3682803680, // Shayura's Wrath
+    3920882229, // Exalted Truth (Adept)
     3921970316, // Gauntlets of the Exile
+    4023807721, // Shayura's Wrath (Adept)
     4100217958, // Focusing Boots
     4177448932, // Focusing Wraps
+    4248997900, // Incisor
   ],
-  umbral: [],
-  vexoffensive: [],
-  vog: [],
-  vow: [],
-  wartable: [],
-  wellspring: [],
-  wrathborn: [],
+  votd: [
+    2480074702, // Forbearance
+  ],
+  vow: [
+    2480074702, // Forbearance
+  ],
+  vowofthedisciple: [
+    2480074702, // Forbearance
+  ],
+  warlordsruin: [
+    557092665, // Dark Age Cloak
+    632989816, // Dark Age Gauntlets
+    806004493, // Dark Age Gloves
+    851401651, // Dark Age Overcoat
+    1476803535, // Dark Age Legbraces
+    1933599476, // Dark Age Visor
+    2426502022, // Dark Age Strides
+    2662590925, // Dark Age Mark
+    2771011469, // Dark Age Mask
+    2963224754, // Dark Age Sabatons
+    3056827626, // Dark Age Bond
+    3423574140, // Dark Age Grips
+    3683772388, // Dark Age Harness
+    3735435664, // Dark Age Chestrig
+    4090037601, // Dark Age Helm
+  ],
+  watcher: [
+    436695703, // TM-Cogburn Custom Plate
+    498918879, // TM-Earp Custom Grips
+    708921139, // TM-Cogburn Custom Legguards
+    1349399252, // TM-Earp Custom Cloaked Stetson
+    2341879253, // TM-Moss Custom Bond
+    2565015142, // TM-Cogburn Custom Mark
+    3344225390, // TM-Earp Custom Hood
+    3511740432, // TM-Moss Custom Gloves
+    3715136417, // TM-Earp Custom Chaps
+    3870375786, // TM-Moss Custom Pants
+    3933500353, // TM-Cogburn Custom Gauntlets
+    3946384952, // TM-Moss Custom Duster
+    4039955353, // TM-Moss Custom Hat
+    4177293424, // TM-Cogburn Custom Cover
+    4288623897, // TM-Earp Custom Vest
+  ],
   zavala: [
     24244626, // Mark of Shelter
     34846448, // Xenos Vale IV

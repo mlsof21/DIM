@@ -3,16 +3,17 @@
 interface CssExports {
   'addButton': string;
   'buttons': string;
+  'canDrop': string;
   'categoryArmor': string;
   'categoryGeneral': string;
   'categoryWeapons': string;
   'equipped': string;
+  'isOver': string;
   'itemBucket': string;
   'itemCategory': string;
   'items': string;
   'itemsInCategory': string;
   'missingItem': string;
-  'showFashion': string;
   'unequipped': string;
 }
 export const cssExports: CssExports;

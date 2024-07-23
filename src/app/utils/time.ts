@@ -23,12 +23,29 @@ function durationFromMs(ms: number) {
  *
  * negative durations are treated as 0
  */
-export function timerDurationFromMs(milliseconds: number) {
+export function timerDurationFromMs(milliseconds: number, minSegments = 3) {
   const duration = durationFromMs(milliseconds).slice(0, -1);
-  while (duration[0] === 0 && duration.length > 3) {
+  while (duration[0] === 0 && duration.length > minSegments) {
     duration.shift();
   }
   return duration.map((u, i) => `${u}`.padStart(i === 0 ? 0 : 2, '0')).join(':');
+}
+
+/**
+ * print a number of milliseconds as m:s.ms
+ *
+ * negative durations are treated as 0
+ */
+export function timerDurationFromMsWithDecimal(milliseconds: number) {
+  const duration = durationFromMs(milliseconds);
+  while (duration[0] === 0 && duration.length > 3) {
+    duration.shift();
+  }
+
+  const ms = duration.pop()!;
+  duration[duration.length - 1] = (duration.at(-1)! * 1000 + ms) / 1000;
+
+  return duration.map((u, i) => (i !== 0 && u < 10 ? `0${u}` : u)).join(':');
 }
 
 /**
@@ -45,6 +62,27 @@ export function i15dDurationFromMs(milliseconds: number, compact = false) {
     ? `${t('Countdown.Days', {
         count: days,
         context: compact ? 'compact' : '',
+        metadata: { context: ['compact'] },
+      })} ${hhMM}`
+    : `${hhMM}`;
+}
+
+/**
+ * print a number of milliseconds as something like "4d 0:51:23",
+ * containing days, minutes, seconds, and hours.
+ * uses i18n to choose an appropriate substitute for that "d"
+ *
+ * negative durations are treated as 0
+ */
+export function i15dDurationFromMsWithSeconds(milliseconds: number) {
+  const [days, hours, minutes, seconds] = durationFromMs(milliseconds);
+  const hhMM = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds
+    .toString()
+    .padStart(2, '0')}`;
+  return days
+    ? `${t('Countdown.Days', {
+        count: days,
+        context: '',
         metadata: { context: ['compact'] },
       })} ${hhMM}`
     : `${hhMM}`;

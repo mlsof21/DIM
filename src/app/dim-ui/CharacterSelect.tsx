@@ -4,7 +4,7 @@ import { infoLog } from 'app/utils/log';
 import clsx from 'clsx';
 import { animate, motion, PanInfo, Spring, useMotionValue, useTransform } from 'framer-motion';
 import _ from 'lodash';
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import CharacterTileButton from '../character-tile/CharacterTileButton';
 import { DimStore } from '../inventory/store-types';
 import styles from './CharacterSelect.m.scss';
@@ -30,7 +30,7 @@ export default function CharacterSelect({
 }: {
   stores: DimStore[];
   selectedStore: DimStore;
-  onCharacterChanged(storeId: string): void;
+  onCharacterChanged: (storeId: string) => void;
 }) {
   const isPhonePortrait = useIsPhonePortrait();
   stores = stores.filter((s) => !s.isVault);
@@ -61,7 +61,7 @@ function ListCharacterSelect({
 }: {
   stores: DimStore[];
   selectedStore: DimStore;
-  onCharacterChanged(storeId: string): void;
+  onCharacterChanged: (storeId: string) => void;
 }) {
   return (
     <div className={styles.vertical}>
@@ -86,7 +86,7 @@ function SwipableCharacterSelect({
 }: {
   stores: DimStore[];
   selectedStore: DimStore;
-  onCharacterChanged(storeId: string): void;
+  onCharacterChanged: (storeId: string) => void;
 }) {
   const onIndexChanged = (index: number) => {
     onCharacterChanged(stores[index].id);
@@ -140,9 +140,12 @@ function SwipableCharacterSelect({
   };
 
   const onPanEnd = (_e: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    if (!trackRef.current) {
+      return;
+    }
     // Animate to one of the settled whole-number indexes
     let newIndex = _.clamp(Math.round(offset.get()), 0, numSegments - 1);
-    const scale = trackRef.current!.clientWidth / numSegments;
+    const scale = trackRef.current.clientWidth / numSegments;
 
     if (index === newIndex) {
       const swipe = (info.velocity.x * info.offset.x) / (scale * scale);
@@ -162,7 +165,7 @@ function SwipableCharacterSelect({
 
   // Transform the segment-relative offset back into pixels
   const offsetPercent = useTransform(offset, (o) =>
-    trackRef.current ? (trackRef.current.clientWidth / numSegments) * -o : 0
+    trackRef.current ? (trackRef.current.clientWidth / numSegments) * -o : 0,
   );
 
   return (

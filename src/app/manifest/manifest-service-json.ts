@@ -1,24 +1,32 @@
+import { HttpStatusError, toHttpStatusError } from 'app/bungie-api/http-client';
 import { settingsSelector } from 'app/dim-api/selectors';
 import { t } from 'app/i18next-t';
 import { loadingEnd, loadingStart } from 'app/shell/actions';
 import { del, get, set } from 'app/storage/idb-keyval';
 import { ThunkResult } from 'app/store/types';
 import { emptyArray, emptyObject } from 'app/utils/empty';
+import { convertToError, errorMessage } from 'app/utils/errors';
 import { errorLog, infoLog, timer } from 'app/utils/log';
-import { dedupePromise } from 'app/utils/util';
+import { dedupePromise } from 'app/utils/promises';
+import { LookupTable } from 'app/utils/util-types';
 import {
   AllDestinyManifestComponents,
   DestinyInventoryItemDefinition,
   DestinyItemActionBlockDefinition,
   DestinyItemTalentGridBlockDefinition,
   DestinyItemTranslationBlockDefinition,
+  DestinyManifestComponentName,
 } from 'bungie-api-ts/destiny2';
+import { BucketHashes } from 'data/d2/generated-enums';
 import { deepEqual } from 'fast-equals';
+import { Draft } from 'immer';
 import _ from 'lodash';
 import { getManifest as d2GetManifest } from '../bungie-api/destiny2-api';
 import { showNotification } from '../notifications/notifications';
 import { settingsReady } from '../settings/settings';
-import { reportException } from '../utils/exceptions';
+import { reportException } from '../utils/sentry';
+
+const TAG = 'manifest';
 
 // This file exports D2ManifestService at the bottom of the
 // file (TS wants us to declare classes before using them)!
@@ -28,27 +36,29 @@ import { reportException } from '../utils/exceptions';
 // Testing flags
 const alwaysLoadRemote = false;
 
-type Mutable<T> = { -readonly [P in keyof T]: Mutable<T[P]> };
 /** Functions that can reduce the size of a table after it's downloaded but before it's saved to cache. */
-const tableTrimmers = {
-  DestinyInventoryItemDefinition(table: { [hash: number]: DestinyInventoryItemDefinition }) {
+const tableTrimmers: LookupTable<DestinyManifestComponentName, (table: any) => any> = {
+  DestinyInventoryItemDefinition: (table: { [hash: number]: DestinyInventoryItemDefinition }) => {
     for (const key in table) {
-      const def = table[key] as Mutable<DestinyInventoryItemDefinition>;
+      const def = table[key] as Draft<DestinyInventoryItemDefinition>;
 
       // Deleting properties can actually make memory usage go up as V8 replaces some efficient
       // structures from JSON parsing. Only replace objects with empties, and always test with the
       // memory profiler. Don't assume that deleting something makes this smaller.
 
-      def.action = emptyObject<Mutable<DestinyItemActionBlockDefinition>>();
+      def.action = emptyObject<Draft<DestinyItemActionBlockDefinition>>();
       def.backgroundColor = emptyObject();
-      def.translationBlock = emptyObject<Mutable<DestinyItemTranslationBlockDefinition>>();
+      def.translationBlock = emptyObject<Draft<DestinyItemTranslationBlockDefinition>>();
       if (def.equippingBlock?.displayStrings?.length) {
         def.equippingBlock.displayStrings = emptyArray();
       }
       if (def.preview?.derivedItemCategories?.length) {
         def.preview.derivedItemCategories = emptyArray();
       }
-      def.talentGrid = emptyObject<Mutable<DestinyItemTalentGridBlockDefinition>>();
+      if (def.inventory?.bucketTypeHash !== BucketHashes.Subclass) {
+        // The only useful bit about talent grids is for subclass damage types
+        def.talentGrid = emptyObject<Draft<DestinyItemTalentGridBlockDefinition>>();
+      }
 
       if (def.sockets) {
         def.sockets.intrinsicSockets = emptyArray();
@@ -69,34 +79,15 @@ const localStorageKey = 'd2-manifest-version';
 const idbKey = 'd2-manifest';
 let version: string | null = null;
 
-/**
- * This tells users to reload the app. It fires no more
- * often than every 10 seconds, and only warns if the manifest
- * version has actually changed.
- */
-export const warnMissingDefinition = _.debounce(
-  async () => {
-    const data = await d2GetManifest();
-    // If none of the paths (for any language) matches what we downloaded...
-    if (version && !Object.values(data.jsonWorldContentPaths).includes(version)) {
-      // The manifest has updated!
-      showNotification({
-        type: 'warning',
-        title: t('Manifest.Outdated'),
-        body: t('Manifest.OutdatedExplanation'),
-      });
-    }
-  },
-  10000,
-  {
-    leading: true,
-    trailing: false,
-  }
-);
+export async function checkForNewManifest() {
+  const data = await d2GetManifest();
+  // If none of the paths (for any language) matches what we downloaded...
+  return version && !Object.values(data.jsonWorldContentPaths).includes(version);
+}
 
 const getManifestAction = _.once(
   (tableAllowList: string[]): ThunkResult<AllDestinyManifestComponents> =>
-    dedupePromise((dispatch) => dispatch(doGetManifest(tableAllowList)))
+    dedupePromise((dispatch) => dispatch(doGetManifest(tableAllowList))),
 );
 
 export function getManifest(tableAllowList: string[]): ThunkResult<AllDestinyManifestComponents> {
@@ -106,7 +97,7 @@ export function getManifest(tableAllowList: string[]): ThunkResult<AllDestinyMan
 function doGetManifest(tableAllowList: string[]): ThunkResult<AllDestinyManifestComponents> {
   return async (dispatch) => {
     dispatch(loadingStart(t('Manifest.Load')));
-    const stopTimer = timer('Load manifest');
+    const stopTimer = timer(TAG, 'Load manifest');
     try {
       const manifest = await dispatch(loadManifest(tableAllowList));
       if (!manifest.DestinyVendorDefinition) {
@@ -114,26 +105,28 @@ function doGetManifest(tableAllowList: string[]): ThunkResult<AllDestinyManifest
       }
       return manifest;
     } catch (e) {
-      let message = e.message || e;
+      let message = errorMessage(e);
 
-      if (e instanceof TypeError || e.status === -1) {
+      if (e instanceof TypeError || (e instanceof HttpStatusError && e.status === -1)) {
         message = navigator.onLine
           ? t('BungieService.NotConnectedOrBlocked')
           : t('BungieService.NotConnected');
-      } else if (e.status === 503 || e.status === 522 /* cloudflare */) {
-        message = t('BungieService.Difficulties');
-      } else if (e.status < 200 || e.status >= 400) {
-        message = t('BungieService.NetworkError', {
-          status: e.status,
-          statusText: e.statusText,
-        });
+      } else if (e instanceof HttpStatusError) {
+        if (e.status === 503 || e.status === 522 /* cloudflare */) {
+          message = t('BungieService.Difficulties');
+        } else if (e.status < 200 || e.status >= 400) {
+          message = t('BungieService.NetworkError', {
+            status: e.status,
+            statusText: e.message,
+          });
+        }
       } else {
         // Something may be wrong with the manifest
         await deleteManifestFile();
       }
 
       const statusText = t('Manifest.Error', { error: message });
-      errorLog('manifest', 'Manifest loading error', { error: e }, e);
+      errorLog(TAG, 'Manifest loading error', e);
       reportException('manifest load', e);
       const error = new Error(statusText);
       error.name = 'ManifestError';
@@ -160,12 +153,12 @@ function loadManifest(tableAllowList: string[]): ThunkResult<AllDestinyManifestC
 
       // Use the path as the version, rather than the "version" field, because
       // Bungie can update the manifest file without changing that version.
-      version = path;
+      version = `v2-${path}`; // the prefix is used to bust the cache if we change the table trimmers
     } catch (e) {
       // If we can't get info about the current manifest, try to just use whatever's already saved.
       version = localStorage.getItem(localStorageKey);
       if (version) {
-        return await loadManifestFromCache(version, tableAllowList);
+        return loadManifestFromCache(version, tableAllowList);
       } else {
         throw e;
       }
@@ -174,7 +167,7 @@ function loadManifest(tableAllowList: string[]): ThunkResult<AllDestinyManifestC
     try {
       return await loadManifestFromCache(version, tableAllowList);
     } catch (e) {
-      return await dispatch(loadManifestRemote(version, components, tableAllowList));
+      return dispatch(loadManifestRemote(version, components, tableAllowList));
     }
   };
 }
@@ -187,7 +180,7 @@ function loadManifestRemote(
   components: {
     [key: string]: string;
   },
-  tableAllowList: string[]
+  tableAllowList: string[],
 ): ThunkResult<AllDestinyManifestComponents> {
   return async (dispatch) => {
     dispatch(loadingStart(t('Manifest.Download')));
@@ -207,7 +200,7 @@ export async function downloadManifestComponents(
   components: {
     [key: string]: string;
   },
-  tableAllowList: string[]
+  tableAllowList: string[],
 ) {
   // Adding a cache buster to work around bad cached CloudFlare data: https://github.com/DestinyItemManager/DIM/issues/5101
   // try canonical component URL which should likely be already cached,
@@ -219,15 +212,15 @@ export async function downloadManifestComponents(
     `?dim-${Math.random().toString().split('.')[1] ?? 'dimCacheBust'}`,
   ];
 
-  const manifest = {};
+  const manifest: Partial<AllDestinyManifestComponents> = {};
 
   // Load the manifest tables we want table-by-table, in parallel. This is
   // faster and downloads less data than the single huge file.
   const futures = tableAllowList
-    .map((t) => `Destiny${t}Definition`)
+    .map((t) => `Destiny${t}Definition` as DestinyManifestComponentName)
     .map(async (table) => {
-      let response: Response | null = null;
-      let error = null;
+      let response: Response;
+      let error: Error | undefined;
       let body = null;
 
       for (const query of cacheBusterStrings) {
@@ -235,18 +228,22 @@ export async function downloadManifestComponents(
           response = await fetch(`https://www.bungie.net${components[table]}${query}`);
           if (response.ok) {
             // Sometimes the file is found, but isn't parseable as JSON
-            body = await response.json();
+            body =
+              (await response.json()) as AllDestinyManifestComponents[DestinyManifestComponentName];
             break;
           }
-          error ??= response;
+          error ??= await toHttpStatusError(response);
         } catch (e) {
-          error ??= e;
+          error ??= convertToError(e);
         }
       }
-      if (!body && error) {
-        throw error;
+      if (!body) {
+        throw error ?? new Error(`Table ${table}`);
       }
-      manifest[table] = tableTrimmers[table] ? tableTrimmers[table](body) : body;
+
+      // I couldn't figure out how to make these types work...
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      manifest[table] = table in tableTrimmers ? tableTrimmers[table]!(body) : body;
     });
 
   await Promise.all(futures);
@@ -257,15 +254,15 @@ export async function downloadManifestComponents(
 async function saveManifestToIndexedDB(
   typedArray: object,
   version: string,
-  tableAllowList: string[]
+  tableAllowList: string[],
 ) {
   try {
     await set(idbKey, typedArray);
-    infoLog('manifest', `Successfully stored manifest file.`);
+    infoLog(TAG, `Successfully stored manifest file.`);
     localStorage.setItem(localStorageKey, version);
-    localStorage.setItem(localStorageKey + '-whitelist', JSON.stringify(tableAllowList));
+    localStorage.setItem(`${localStorageKey}-whitelist`, JSON.stringify(tableAllowList));
   } catch (e) {
-    errorLog('manifest', 'Error saving manifest file', e);
+    errorLog(TAG, 'Error saving manifest file', e);
     showNotification({
       title: t('Help.NoStorage'),
       body: t('Help.NoStorageMessage'),
@@ -285,14 +282,16 @@ function deleteManifestFile() {
  */
 async function loadManifestFromCache(
   version: string,
-  tableAllowList: string[]
+  tableAllowList: string[],
 ): Promise<AllDestinyManifestComponents> {
   if (alwaysLoadRemote) {
     throw new Error('Testing - always load remote');
   }
 
   const currentManifestVersion = localStorage.getItem(localStorageKey);
-  const currentAllowList = JSON.parse(localStorage.getItem(localStorageKey + '-whitelist') || '[]');
+  const currentAllowList = JSON.parse(
+    localStorage.getItem(`${localStorageKey}-whitelist`) || '[]',
+  ) as string[];
   if (currentManifestVersion === version && deepEqual(currentAllowList, tableAllowList)) {
     const manifest = await get<AllDestinyManifestComponents>(idbKey);
     if (!manifest) {

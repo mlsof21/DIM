@@ -1,5 +1,6 @@
+/* eslint-disable @typescript-eslint/method-signature-style */
 declare const $DIM_VERSION: string;
-declare const $DIM_FLAVOR: 'release' | 'beta' | 'dev' | 'test';
+declare const $DIM_FLAVOR: 'release' | 'beta' | 'dev' | 'test' | 'pr';
 declare const $DIM_BUILD_DATE: string;
 declare const $DIM_WEB_API_KEY: string;
 declare const $DIM_WEB_CLIENT_ID: string;
@@ -7,35 +8,10 @@ declare const $DIM_WEB_CLIENT_SECRET: string;
 declare const $DIM_API_KEY: string;
 declare const $SPEECHLY_APP_ID: string;
 declare const $BROWSERS: string[];
+declare const $ANALYTICS_PROPERTY: string;
+declare const $PUBLIC_PATH: string;
 
-declare const $featureFlags: {
-  /** Print debug info to console about item moves */
-  debugMoves: boolean;
-  /** Debug Service Worker */
-  debugSW: boolean;
-  /** Send exception reports to Sentry.io */
-  sentry: boolean;
-  /** Community-curated wish lists */
-  wishLists: boolean;
-  /** Show a banner for supporting a charitable cause */
-  issueBanner: boolean;
-  /** Show the triage tab in the item popup */
-  triage: boolean;
-  /** Advanced Write Actions (inserting mods) */
-  awa: boolean;
-  /** Item feed sidebar */
-  itemFeed: boolean;
-  /** Clarity perk descriptions */
-  clarityDescriptions: boolean;
-  /** Elgato Stream Deck integration */
-  elgatoStreamDeck: boolean;
-  /* Warn when DIM Sync is off and you save some DIM-specific data */
-  warnNoSync: boolean;
-  /* Expose the "Add required stat mods" Loadout Optimizer toggle */
-  loAutoStatMods: boolean;
-};
-
-declare function ga(...params: string[]): void;
+declare const $featureFlags: ReturnType<typeof import('../config/feature-flags').makeFeatureFlags>;
 
 interface Window {
   OC?: unknown;
@@ -45,6 +21,12 @@ interface Window {
   __precacheManifest: string[] | undefined;
   __WB_MANIFEST: string[];
   skipWaiting(): void;
+
+  /**
+   * You can set this in console to enable the ability to use a saved JSON
+   * profile for debugging.
+   */
+  enableMockProfile?: boolean;
 }
 
 interface Navigator {
@@ -55,34 +37,36 @@ interface Navigator {
   clearAppBadge();
 }
 
-/**
- * The BeforeInstallPromptEvent is fired at the Window.onbeforeinstallprompt handler
- * before a user is prompted to "install" a web site to a home screen on mobile.
- *
- * Only supported on Chrome and Android Webview.
- */
-interface BeforeInstallPromptEvent extends Event {
-  /**
-   * Returns an array of DOMString items containing the platforms on which the event was dispatched.
-   * This is provided for user agents that want to present a choice of versions to the user such as,
-   * for example, "web" or "play" which would allow the user to chose between a web version or
-   * an Android version.
-   */
-  readonly platforms: string[];
+interface Performance {
+  measureUserAgentSpecificMemory(): Promise<MeasureMemoryResult>;
+}
 
-  /**
-   * Returns a Promise that resolves to a DOMString containing either "accepted" or "dismissed".
-   */
-  readonly userChoice: Promise<{
-    outcome: 'accepted' | 'dismissed';
-    platform: string;
-  }>;
+interface MeasureMemoryResult {
+  bytes: number;
+  breakdown: {
+    bytes: number;
+    attribution: [
+      {
+        url: string;
+        scope: string;
+      },
+    ];
+    types: string[];
+  }[];
+}
 
-  /**
-   * Allows a developer to show the install prompt at a time of their own choosing.
-   * This method returns a Promise.
-   */
-  prompt(): Promise<void>;
+interface ObjectConstructor {
+  groupBy<Item>(
+    items: Iterable<Item>,
+    keySelector: (item: Item, index: number) => string | number,
+  ): Record<string, Item[]>;
+}
+
+interface MapConstructor {
+  groupBy<Item, Key>(
+    items: Iterable<Item>,
+    keySelector: (item: Item, index: number) => Key,
+  ): Map<Key, Item[]>;
 }
 
 declare module '*/CHANGELOG.md' {

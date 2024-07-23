@@ -1,37 +1,38 @@
 import { InfuseDirection } from '@destinyitemmanager/dim-api-types';
+import { gaPageView } from 'app/google';
 import { t } from 'app/i18next-t';
 import { applyLoadout } from 'app/loadout-drawer/loadout-apply';
-import { LoadoutItem } from 'app/loadout-drawer/loadout-types';
+import { LoadoutItem } from 'app/loadout/loadout-types';
 import SearchBar from 'app/search/SearchBar';
+import { filterFactorySelector } from 'app/search/items/item-search-filter';
 import { useSetting } from 'app/settings/hooks';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { DimThunkDispatch } from 'app/store/types';
 import { useEventBusListener } from 'app/utils/hooks';
 import { isD1Item } from 'app/utils/item-utils';
 import clsx from 'clsx';
-import React, { useCallback, useDeferredValue, useEffect, useReducer } from 'react';
+import { useCallback, useDeferredValue, useEffect, useReducer } from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
 import Sheet from '../dim-ui/Sheet';
 import ConnectedInventoryItem from '../inventory/ConnectedInventoryItem';
 import { DimItem } from '../inventory/item-types';
-import { allItemsSelector, currentStoreSelector } from '../inventory/selectors';
+import { allItemsSelector, currentStoreSelector, getTagSelector } from '../inventory/selectors';
 import { DimStore } from '../inventory/store-types';
 import { convertToLoadoutItem, newLoadout } from '../loadout-drawer/loadout-utils';
 import { showNotification } from '../notifications/notifications';
-import { filterFactorySelector } from '../search/search-filter';
 import { AppIcon, faArrowCircleDown, faEquals, faRandom, helpIcon, plusIcon } from '../shell/icons';
 import { chainComparator, compareBy, reverseComparator } from '../utils/comparators';
+import styles from './InfusionFinder.m.scss';
 import { showInfuse$ } from './infuse';
-import './InfusionFinder.scss';
 
 const itemComparator = chainComparator(
   reverseComparator(compareBy((item: DimItem) => item.power)),
   compareBy((item: DimItem) =>
     isD1Item(item) && item.talentGrid
       ? (item.talentGrid.totalXP / item.talentGrid.totalXPRequired) * 0.5
-      : 0
-  )
+      : 0,
+  ),
 );
 
 interface State {
@@ -77,8 +78,8 @@ function stateReducer(state: State, action: Action): State {
             ? InfuseDirection.INFUSE
             : InfuseDirection.FUEL
           : action.hasFuel
-          ? InfuseDirection.FUEL
-          : InfuseDirection.INFUSE;
+            ? InfuseDirection.FUEL
+            : InfuseDirection.INFUSE;
 
       return {
         ...state,
@@ -126,6 +127,7 @@ export default function InfusionFinder() {
   const dispatch = useThunkDispatch();
   const allItems = useSelector(allItemsSelector);
   const currentStore = useSelector(currentStoreSelector);
+  const getTag = useSelector(getTagSelector);
   const filters = useSelector(filterFactorySelector);
   const [lastInfusionDirection, setLastInfusionDirection] = useSetting('infusionDirection');
 
@@ -134,7 +136,7 @@ export default function InfusionFinder() {
     {
       direction: lastInfusionDirection,
       filter: '',
-    }
+    },
   );
   const filter = useDeferredValue(liveFilter);
 
@@ -148,7 +150,7 @@ export default function InfusionFinder() {
 
   useEffect(() => {
     if (show && destinyVersion) {
-      ga('send', 'pageview', `/profileMembershipId/d${destinyVersion}/infuse`);
+      gaPageView(`/profileMembershipId/d${destinyVersion}/infuse`);
     }
   }, [destinyVersion, show]);
 
@@ -161,8 +163,8 @@ export default function InfusionFinder() {
         const hasFuel = allItems.some((i) => isInfusable(i, item));
         stateDispatch({ type: 'init', item, hasInfusables: hasInfusables, hasFuel });
       },
-      [allItems]
-    )
+      [allItems],
+    ),
   );
 
   // Close the sheet on navigation
@@ -186,7 +188,7 @@ export default function InfusionFinder() {
     (item) =>
       (direction === InfuseDirection.INFUSE
         ? isInfusable(query, item)
-        : isInfusable(item, query)) && filterFn(item)
+        : isInfusable(item, query)) && filterFn(item),
   );
 
   const dupes = items.filter((item) => item.hash === query.hash);
@@ -194,8 +196,10 @@ export default function InfusionFinder() {
   items = items.filter((item) => item.hash !== query.hash);
   items.sort(itemComparator);
 
+  const preferredSource =
+    dupes.find((i) => getTag(i) === 'infuse') || items.find((i) => getTag(i) === 'infuse');
   const effectiveTarget = target || dupes[0] || items[0];
-  const effectiveSource = source || dupes[0] || items[0];
+  const effectiveSource = source || preferredSource || dupes[0] || items[0];
 
   let result: DimItem | undefined;
   if (effectiveSource?.power && effectiveTarget?.power) {
@@ -211,7 +215,7 @@ export default function InfusionFinder() {
   }
 
   const missingItem = (
-    <div className="item missingItem">
+    <div className={clsx('item', styles.missingItem)}>
       <div className="item-img">
         <AppIcon icon={helpIcon} />
       </div>
@@ -219,8 +223,8 @@ export default function InfusionFinder() {
     </div>
   );
 
-  const header = ({ onClose }: { onClose(): void }) => (
-    <div className="infuseHeader">
+  const header = ({ onClose }: { onClose: () => void }) => (
+    <div className={styles.infuseHeader}>
       <h1>
         {direction === InfuseDirection.INFUSE
           ? t('Infusion.InfuseTarget', {
@@ -230,20 +234,20 @@ export default function InfusionFinder() {
               name: query.name,
             })}
       </h1>
-      <div className="infusionControls">
-        <div className="infuseTopRow">
-          <div className="infusionEquation">
+      <div className={styles.infusionControls}>
+        <div className={styles.infuseTopRow}>
+          <div className={styles.infusionEquation}>
             {effectiveTarget ? <ConnectedInventoryItem item={effectiveTarget} /> : missingItem}
-            <div className="icon">
+            <div className={styles.icon}>
               <AppIcon icon={plusIcon} />
             </div>
             {effectiveSource ? <ConnectedInventoryItem item={effectiveSource} /> : missingItem}
-            <div className="icon">
+            <div className={styles.icon}>
               <AppIcon icon={faEquals} />
             </div>
             {result ? <ConnectedInventoryItem item={result} /> : missingItem}
           </div>
-          <div className="infuseActions">
+          <div className={styles.infuseActions}>
             <button type="button" className="dim-button" onClick={switchDirection}>
               <AppIcon icon={faRandom} /> {t('Infusion.SwitchDirection')}
             </button>
@@ -260,9 +264,12 @@ export default function InfusionFinder() {
             )}
           </div>
         </div>
-        <div className="infuseSearch">
-          <SearchBar onQueryChanged={onQueryChanged} placeholder={t('Infusion.Filter')} instant />
-        </div>
+        <SearchBar
+          className={styles.infuseSearch}
+          onQueryChanged={onQueryChanged}
+          placeholder={t('Infusion.Filter')}
+          instant
+        />
       </div>
     </div>
   );
@@ -270,7 +277,7 @@ export default function InfusionFinder() {
   const renderItem = (item: DimItem) => (
     <div
       key={item.id}
-      className={clsx({ 'infuse-selected': item === target })}
+      className={clsx({ [styles.infuseSelected]: item === target })}
       onClick={() => selectItem(item)}
     >
       <ConnectedInventoryItem item={item} />
@@ -278,8 +285,13 @@ export default function InfusionFinder() {
   );
 
   return (
-    <Sheet onClose={reset} header={header} sheetClassName="infuseDialog" freezeInitialHeight={true}>
-      <div className="infuseSources">
+    <Sheet
+      onClose={reset}
+      header={header}
+      sheetClassName={styles.infuseDialog}
+      freezeInitialHeight={true}
+    >
+      <div className={styles.infuseSources}>
         {items.length > 0 || dupes.length > 0 ? (
           <>
             <div className="sub-bucket">{dupes.map(renderItem)}</div>
@@ -306,11 +318,9 @@ function isInfusable(target: DimItem, source: DimItem) {
   }
 
   return (
-    source.infusionQuality &&
-    target.infusionQuality &&
-    target.infusionQuality.infusionCategoryHashes.some((h) =>
-      source.infusionQuality!.infusionCategoryHashes.includes(h)
-    ) &&
+    source.infusionCategoryHashes &&
+    target.infusionCategoryHashes &&
+    target.infusionCategoryHashes.some((h) => source.infusionCategoryHashes!.includes(h)) &&
     target.power < source.power
   );
 }
@@ -320,7 +330,7 @@ async function transferItems(
   currentStore: DimStore,
   onClose: () => void,
   source: DimItem,
-  target: DimItem
+  target: DimItem,
 ) {
   if (!source || !target) {
     return;

@@ -6,7 +6,6 @@ import { compareBy } from 'app/utils/comparators';
 import { wishListRollsForItemHashSelector } from 'app/wishlists/selectors';
 import { WishListRoll } from 'app/wishlists/types';
 import _ from 'lodash';
-import React from 'react';
 import { useSelector } from 'react-redux';
 import styles from './AllWishlistRolls.m.scss';
 import { getCraftingTemplate } from './crafting-utils';
@@ -78,7 +77,7 @@ function WishlistRolls({
   realAvailablePlugHashes?: number[];
 }) {
   const defs = useD2Definitions()!;
-  const groupedWishlistRolls = _.groupBy(wishlistRolls, (r) => r.notes || t('Armory.NoNotes'));
+  const groupedWishlistRolls = Object.groupBy(wishlistRolls, (r) => r.notes || t('Armory.NoNotes'));
 
   const templateSockets = getCraftingTemplate(defs, item.hash)?.sockets?.socketEntries;
 
@@ -117,7 +116,7 @@ function WishlistRolls({
 
   return (
     <>
-      {_.map(groupedWishlistRolls, (rolls, notes) => {
+      {Object.entries(groupedWishlistRolls).map(([notes, rolls]) => {
         const consolidatedRolls = consolidateRollsForOneWeapon(defs, item, rolls);
 
         return (
@@ -130,18 +129,18 @@ function WishlistRolls({
                 //   "3": [outlaw, enhanced outlaw]
                 //   "4": [rampage]
                 // }
-                const primariesGroupedByColumn = _.groupBy(
+                const primariesGroupedByColumn = Object.groupBy(
                   cr.commonPrimaryPerks,
-                  (h) => socketByPerkHash[h]?.socketIndex
+                  (h) => socketByPerkHash[h]?.socketIndex ?? -1,
                 );
 
                 // turns the above into
                 // [[outlaw, enhanced outlaw], [rampage]]
                 const primaryBundles = cr.rolls[0].primarySocketIndices.map((socketIndex) =>
-                  primariesGroupedByColumn[socketIndex].sort(
+                  primariesGroupedByColumn[socketIndex ?? -1].sort(
                     // establish a consistent base -> enhanced perk order
-                    compareBy((h) => (h in enhancedToPerk ? 1 : 0))
-                  )
+                    compareBy((h) => (h in enhancedToPerk ? 1 : 0)),
+                  ),
                 );
 
                 // i.e.
@@ -172,8 +171,8 @@ function WishlistRolls({
                             .sort(
                               compareBy(
                                 // unrecognized/unrollable perks sort to last
-                                (h) => columnOrderByPlugHash[h] ?? 9999
-                              )
+                                (h) => columnOrderByPlugHash[h] ?? 9999,
+                              ),
                             )
                             .map((h) => {
                               const socket = socketByPerkHash[h];
@@ -188,7 +187,7 @@ function WishlistRolls({
                                     socketInfo={socket}
                                     hasMenu={false}
                                     notSelected={realAvailablePlugHashes?.includes(
-                                      plug.plugDef.hash
+                                      plug.plugDef.hash,
                                     )}
                                   />
                                 )

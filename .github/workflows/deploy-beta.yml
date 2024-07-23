@@ -1,6 +1,7 @@
 name: Deploy Beta
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -13,27 +14,32 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: beta
+      url: https://beta.dim.gg
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 2 # So sentry can get the previous commit
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-          cache: yarn
+          node-version-file: '.nvmrc'
+          cache: pnpm
 
       - name: Install SSH key
-        uses: shimataro/ssh-key-action@v2
+        uses: benoitchantre/setup-ssh-authentication-action@1.0.1
         with:
-          key: ${{ secrets.SSH_KEY }}
-          name: dim.rsa
-          known_hosts: ${{ secrets.REMOTE_HOST }}
+          private-key: ${{ secrets.SSH_KEY }}
+          private-key-name: dim.rsa
+          known-hosts: ${{ secrets.REMOTE_HOST }}
 
       - name: get-npm-version
         id: package-version
-        uses: martinbeentjes/npm-get-version-action@v1.1.0
+        uses: martinbeentjes/npm-get-version-action@v1.3.1
 
       - name: set beta
         run: |
@@ -43,17 +49,18 @@ jobs:
         env:
           RUN_NUM: ${{ github.run_number }}
         run: |
-          echo "VERSION=${{ steps.package-version.outputs.current-version }}.$(($RUN_NUM+1000000))" >> $GITHUB_ENV
+          echo "VERSION=${{ steps.package-version.outputs.current-version }}.$(($RUN_NUM))" >> $GITHUB_ENV
 
       - name: Install
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       - name: Build
-        run: yarn build:beta
+        run: pnpm build:beta
         env:
-          WEB_API_KEY: ${{ secrets.WEB_API_KEY }}
-          WEB_OAUTH_CLIENT_ID: ${{ secrets.WEB_OAUTH_CLIENT_ID }}
-          WEB_OAUTH_CLIENT_SECRET: ${{ secrets.WEB_OAUTH_CLIENT_SECRET }}
+          NODE_OPTIONS: "--max_old_space_size=8192"
+          WEB_API_KEY: ${{ secrets.BUNGIE_API_KEY }}
+          WEB_OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          WEB_OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_SECRET }}
           DIM_API_KEY: ${{ secrets.DIM_API_KEY }}
 
       # Send webpack stats and build information to RelativeCI
@@ -65,13 +72,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check Syntax
-        run: yarn syntax
+        run: pnpm syntax
 
       - name: Rsync to Server
         run: ./build/rsync-deploy.sh
         env:
             SSH_PRIVATE_KEY: ${{ secrets.SSH_KEY }}
             SOURCE: "dist/"
+            REMOTE_USER: ${{ secrets.REMOTE_USER }}
             REMOTE_HOST: ${{ secrets.REMOTE_HOST }}
             REMOTE_PATH: beta.destinyitemmanager.com
 
@@ -91,3 +99,4 @@ jobs:
         with:
           environment: beta
           version: ${{ env.VERSION }}
+          ignore_missing: true

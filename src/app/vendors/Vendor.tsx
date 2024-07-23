@@ -1,10 +1,11 @@
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import React from 'react';
 import BungieImage from '../dim-ui/BungieImage';
 import CollapsibleTitle from '../dim-ui/CollapsibleTitle';
 import Countdown from '../dim-ui/Countdown';
-import { D2Vendor } from './d2-vendors';
 import styles from './Vendor.m.scss';
 import VendorItems from './VendorItems';
+import { D2Vendor } from './d2-vendors';
 
 export function VendorLocation({ children }: { children: React.ReactNode }) {
   return <span className={styles.location}>{children}</span>;
@@ -21,7 +22,6 @@ export default function Vendor({
   vendor,
   ownedItemHashes,
   currencyLookups,
-  filtering,
   characterId,
 }: {
   vendor: D2Vendor;
@@ -29,15 +29,14 @@ export default function Vendor({
   currencyLookups: {
     [itemHash: number]: number;
   };
-  filtering: boolean;
   characterId: string;
 }) {
   const placeString = Array.from(
     new Set(
       [vendor.destination?.displayProperties.name, vendor.place?.displayProperties.name].filter(
-        (n) => n?.length
-      )
-    )
+        (n) => n?.length,
+      ),
+    ),
   ).join(', ');
 
   let refreshTime = vendor.component && new Date(vendor.component.nextRefreshDate);
@@ -51,29 +50,30 @@ export default function Vendor({
         className={styles.title}
         title={
           <>
-            <span className={styles.vendorIconWrapper}>
-              <BungieImage
-                src={
-                  vendor.def.displayProperties.smallTransparentIcon ||
-                  vendor.def.displayProperties.icon
-                }
-                className={styles.icon}
-              />
-            </span>
+            <BungieImage
+              src={
+                vendor.def.displayProperties.smallTransparentIcon ||
+                vendor.def.displayProperties.icon
+              }
+              className={styles.icon}
+            />
             <div className={styles.titleDetails}>
-              <div>{vendor.def.displayProperties.name}</div>
+              <div>
+                <RichDestinyText text={vendor.def.displayProperties.name} />
+              </div>
               <VendorLocation>{placeString}</VendorLocation>
             </div>
           </>
         }
-        extra={refreshTime && <Countdown endTime={refreshTime} />}
+        extra={refreshTime && <Countdown endTime={refreshTime} className={styles.countdown} />}
         sectionId={`d2vendor-${vendor.def.hash}`}
+        // hi! this sectionId formatting matters for dispatching vendor detail api requests.
+        // please modify carefully and see how it's used in vendorsNeedingComponents in loadAllVendors
       >
         <VendorItems
           vendor={vendor}
           ownedItemHashes={ownedItemHashes}
           currencyLookups={currencyLookups}
-          filtering={filtering}
           characterId={characterId}
         />
       </CollapsibleTitle>

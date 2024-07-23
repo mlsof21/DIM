@@ -20,7 +20,7 @@ export default function ItemStats({
   }
 
   const hasIcons = stats.some(
-    (s) => s.displayProperties.hasIcon || (item && isD1Stat(item, s) && s.qualityPercentage?.min)
+    (s) => s.displayProperties.hasIcon || (item && isD1Stat(item, s) && s.qualityPercentage?.min),
   );
 
   return (
@@ -29,7 +29,7 @@ export default function ItemStats({
         <ItemStat key={stat.statHash} stat={stat} item={item} />
       ))}
 
-      {item && isD1Item(item) && item.quality?.min && <D1QualitySummaryStat item={item} />}
+      {item && isD1Item(item) && Boolean(item.quality?.min) && <D1QualitySummaryStat item={item} />}
     </div>
   );
 }

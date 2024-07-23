@@ -1,11 +1,12 @@
 import { currentAccountSelector } from 'app/accounts/selectors';
+import { BungieError } from 'app/bungie-api/http-client';
 import { InventoryBuckets } from 'app/inventory/inventory-buckets';
 import { bucketsSelector, storesSelector } from 'app/inventory/selectors';
 import { amountOfItem } from 'app/inventory/stores-helpers';
 import { get, set } from 'app/storage/idb-keyval';
 import { ThunkResult } from 'app/store/types';
+import { filterMap } from 'app/utils/collections';
 import { errorLog } from 'app/utils/log';
-import copy from 'fast-copy';
 import _ from 'lodash';
 import { DestinyAccount } from '../../accounts/destiny-account';
 import { getVendorForCharacter } from '../../bungie-api/destiny1-api';
@@ -15,6 +16,7 @@ import { processItems } from '../../inventory/store/d1-item-factory';
 import { loadingTracker } from '../../shell/loading-tracker';
 import { D1ManifestDefinitions } from '../d1-definitions';
 import { factionAligned } from '../d1-factions';
+import { D1ItemComponent, D1VendorDefinition } from '../d1-manifest-types';
 
 /*
 const allVendors = [
@@ -106,7 +108,7 @@ export interface Vendor {
     title: string;
     saleItems: VendorSaleItem[];
   }[];
-  def: VendorDefinition;
+  def: D1VendorDefinition;
 
   cacheKeys: {
     [storeId: string]: {
@@ -118,7 +120,7 @@ export interface Vendor {
 
   saleItemCategories: {
     saleItems: {
-      item: { itemInstanceId: string };
+      item: D1ItemComponent;
       vendorItemIndex: number;
       costs: { value: number; itemHash: number }[];
       failureIndexes: number[];
@@ -126,21 +128,6 @@ export interface Vendor {
     }[];
     categoryIndex: number;
   }[];
-}
-
-interface VendorDefinition {
-  hash: number;
-  summary: {
-    vendorName: string;
-    factionHash: number;
-    factionIcon?: string;
-    vendorIcon: string;
-    vendorOrder: number;
-    vendorSubcategoryHash: number;
-    vendorCategoryHash: number;
-  };
-  categories: { [x: string]: any };
-  failureStrings: { [x: string]: any };
 }
 
 /**
@@ -155,14 +142,14 @@ export function loadVendors(): ThunkResult<{ [vendorHash: number]: Vendor }> {
     const buckets = bucketsSelector(getState())!;
     const reloadPromise = (async () => {
       // Narrow down to only visible vendors (not packages and such)
-      const vendorList = Object.values(defs.Vendor).filter((v) => v.summary.visible);
+      const vendorList = Object.values(defs.Vendor.getAll()).filter((v) => v.summary.visible);
 
       const vendors = _.compact(
         await Promise.all(
           vendorList.flatMap((vendorDef) =>
-            fetchVendor(vendorDef, characters, account, defs, buckets)
-          )
-        )
+            fetchVendor(vendorDef, characters, account, defs, buckets),
+          ),
+        ),
       );
       return _.keyBy(vendors, (v) => v.hash);
     })();
@@ -173,18 +160,18 @@ export function loadVendors(): ThunkResult<{ [vendorHash: number]: Vendor }> {
 }
 
 async function fetchVendor(
-  vendorDef: VendorDefinition,
+  vendorDef: D1VendorDefinition,
   characters: D1Store[],
   account: DestinyAccount,
   defs: D1ManifestDefinitions,
-  buckets: InventoryBuckets
+  buckets: InventoryBuckets,
 ): Promise<Vendor | null> {
   if (vendorDenyList.includes(vendorDef.hash)) {
     return null;
   }
 
   const vendorsForCharacters = await Promise.all(
-    characters.map((store) => loadVendorForCharacter(account, store, vendorDef, defs, buckets))
+    characters.map((store) => loadVendorForCharacter(account, store, vendorDef, defs, buckets)),
   );
   const nonNullVendors = _.compact(vendorsForCharacters);
   if (nonNullVendors.length) {
@@ -195,20 +182,20 @@ async function fetchVendor(
 }
 
 function mergeVendors([firstVendor, ...otherVendors]: Vendor[]) {
-  const mergedVendor = copy(firstVendor);
+  const mergedVendor = structuredClone(firstVendor);
 
-  otherVendors.forEach((vendor) => {
+  for (const vendor of otherVendors) {
     Object.assign(mergedVendor.cacheKeys, vendor.cacheKeys);
 
-    vendor.categories.forEach((category) => {
+    for (const category of vendor.categories) {
       const existingCategory = mergedVendor.categories.find((c) => c.title === category.title);
       if (existingCategory) {
         mergeCategory(existingCategory, category);
       } else {
         mergedVendor.categories.push(category);
       }
-    });
-  });
+    }
+  }
 
   mergedVendor.allItems = mergedVendor.categories.flatMap((i) => i.saleItems);
 
@@ -225,9 +212,9 @@ function mergeCategory(
     index: number;
     title: string;
     saleItems: VendorSaleItem[];
-  }
+  },
 ) {
-  otherCategory.saleItems.forEach((saleItem) => {
+  for (const saleItem of otherCategory.saleItems) {
     const existingSaleItem = mergedCategory.saleItems.find((i) => i.index === saleItem.index);
     if (existingSaleItem) {
       existingSaleItem.unlocked ||= saleItem.unlocked;
@@ -237,15 +224,15 @@ function mergeCategory(
     } else {
       mergedCategory.saleItems.push(saleItem);
     }
-  });
+  }
 }
 
 async function loadVendorForCharacter(
   account: DestinyAccount,
   store: D1Store,
-  vendorDef: VendorDefinition,
+  vendorDef: D1VendorDefinition,
   defs: D1ManifestDefinitions,
-  buckets: InventoryBuckets
+  buckets: InventoryBuckets,
 ) {
   try {
     return await loadVendor(account, store, vendorDef, defs, buckets);
@@ -255,7 +242,7 @@ async function loadVendorForCharacter(
       errorLog(
         'vendors',
         `Failed to load vendor ${vendorDef.summary.vendorName} for ${store.name}`,
-        e
+        e,
       );
     }
     return null;
@@ -275,7 +262,7 @@ function factionLevel(store: D1Store, factionHash: number) {
  * changed level for the faction associated with this vendor (or changed whether
  * they're aligned with that faction).
  */
-function cachedVendorUpToDate(vendor: Vendor, store: D1Store, vendorDef: VendorDefinition) {
+function cachedVendorUpToDate(vendor: Vendor, store: D1Store, vendorDef: D1VendorDefinition) {
   return (
     vendor &&
     vendor.expires > Date.now() &&
@@ -287,9 +274,9 @@ function cachedVendorUpToDate(vendor: Vendor, store: D1Store, vendorDef: VendorD
 function loadVendor(
   account: DestinyAccount,
   store: D1Store,
-  vendorDef: VendorDefinition,
+  vendorDef: D1VendorDefinition,
   defs: D1ManifestDefinitions,
-  buckets: InventoryBuckets
+  buckets: InventoryBuckets,
 ) {
   const vendorHash = vendorDef.hash;
 
@@ -313,7 +300,7 @@ function loadVendor(
           })
           .catch((e) => {
             // log("vendor error", vendorDef.summary.vendorName, 'for', store.name, e, e.code, e.status);
-            if (e.status === 'DestinyVendorNotFound') {
+            if (e instanceof BungieError && e.status === 'DestinyVendorNotFound') {
               const vendor = {
                 failed: true,
                 code: e.code,
@@ -364,10 +351,10 @@ function calculateExpiration(nextRefreshDate: string, vendorHash: number): numbe
 
 async function processVendor(
   vendor: Vendor,
-  vendorDef: VendorDefinition,
+  vendorDef: D1VendorDefinition,
   defs: D1ManifestDefinitions,
   store: D1Store,
-  buckets: InventoryBuckets
+  buckets: InventoryBuckets,
 ) {
   const def = vendorDef.summary;
   const createdVendor: Vendor = {
@@ -398,61 +385,50 @@ async function processVendor(
 
   const saleItems = vendor.saleItemCategories.flatMap((categoryData) => categoryData.saleItems);
 
-  saleItems.forEach((saleItem) => {
+  for (const saleItem of saleItems) {
     saleItem.item.itemInstanceId = `vendor-${vendorDef.hash}-${saleItem.vendorItemIndex}`;
-  });
+  }
 
-  const items = processItems(
-    { id: null } as any,
-    saleItems.map((i) => i.item) as any[],
+  const items: (D1Item & { vendorIcon?: string })[] = processItems(
+    undefined,
+    saleItems.map((i) => i.item),
     defs,
-    buckets
+    buckets,
   );
   const itemsById = _.keyBy(items, (i) => i.id);
-  const categories = _.compact(
-    _.map(vendor.saleItemCategories, (category) => {
-      const categoryInfo = vendorDef.categories[category.categoryIndex];
-      if (categoryDenyList.includes(categoryInfo.categoryHash)) {
-        return null;
-      }
+  const categories = filterMap(Object.values(vendor.saleItemCategories), (category) => {
+    const categoryInfo = vendorDef.categories[category.categoryIndex];
+    if (categoryDenyList.includes(categoryInfo.categoryHash)) {
+      return undefined;
+    }
 
-      const categoryItems = _.compact(
-        category.saleItems.map((saleItem) => {
-          const unlocked = isSaleItemUnlocked(saleItem);
-          return {
-            index: saleItem.vendorItemIndex,
-            costs: saleItem.costs
-              .map((cost) => ({
-                value: cost.value,
-                currency: _.pick(
-                  defs.InventoryItem.get(cost.itemHash),
-                  'itemName',
-                  'icon',
-                  'itemHash'
-                ),
-              }))
-              .filter((c) => c.value > 0),
-            item: itemsById[`vendor-${vendorDef.hash}-${saleItem.vendorItemIndex}`],
-            // TODO: caveat, this won't update very often!
-            unlocked,
-            unlockedByCharacter: unlocked ? [store.id] : [],
-            failureStrings: saleItem.failureIndexes
-              .map((i) => vendorDef.failureStrings[i])
-              .join('. '),
-          };
-        })
-      );
-
+    const categoryItems = category.saleItems.map((saleItem) => {
+      const unlocked = isSaleItemUnlocked(saleItem);
       return {
-        index: category.categoryIndex,
-        title: categoryInfo.displayTitle,
-        saleItems: categoryItems,
+        index: saleItem.vendorItemIndex,
+        costs: saleItem.costs
+          .map((cost) => ({
+            value: cost.value,
+            currency: _.pick(defs.InventoryItem.get(cost.itemHash), 'itemName', 'icon', 'itemHash'),
+          }))
+          .filter((c) => c.value > 0),
+        item: itemsById[`vendor-${vendorDef.hash}-${saleItem.vendorItemIndex}`],
+        // TODO: caveat, this won't update very often!
+        unlocked,
+        unlockedByCharacter: unlocked ? [store.id] : [],
+        failureStrings: saleItem.failureIndexes.map((i) => vendorDef.failureStrings[i]).join('. '),
       };
-    })
-  );
-  items.forEach((item: any) => {
-    item.vendorIcon = createdVendor.icon;
+    });
+
+    return {
+      index: category.categoryIndex,
+      title: categoryInfo.displayTitle,
+      saleItems: categoryItems,
+    };
   });
+  for (const item of items) {
+    item.vendorIcon = createdVendor.icon;
+  }
   createdVendor.categories = categories;
   return createdVendor;
 }
@@ -469,7 +445,7 @@ function isSaleItemUnlocked(saleItem: { unlockStatuses: { isSet: boolean }[] }) 
 export function countCurrencies(
   stores: D1Store[],
   vendors: { [vendorHash: number]: Vendor },
-  currencies: AccountCurrency[]
+  currencies: AccountCurrency[],
 ) {
   if (!stores || !vendors || !stores.length || _.isEmpty(vendors)) {
     return {};
@@ -480,23 +456,22 @@ export function countCurrencies(
   const costs = saleItems.flatMap((i) => i.costs);
 
   const totalCoins: { [currencyHash: number]: number } = {};
-  costs
-    .map((c) => c.currency.itemHash)
-    .forEach((currencyHash) => {
-      // Legendary marks and glimmer are special cases
-      switch (currencyHash) {
-        case 2534352370:
-        case 3159615086:
-        case 2749350776:
-          totalCoins[currencyHash] =
-            currencies.find((c) => c.itemHash === currencyHash)?.quantity || 0;
-          break;
-        default:
-          totalCoins[currencyHash] = _.sumBy(stores, (store) =>
-            amountOfItem(store, { hash: currencyHash })
-          );
-          break;
-      }
-    });
+  for (const c of costs) {
+    const currencyHash = c.currency.itemHash;
+    // Legendary marks and glimmer are special cases
+    switch (currencyHash) {
+      case 2534352370:
+      case 3159615086:
+      case 2749350776:
+        totalCoins[currencyHash] =
+          currencies.find((c) => c.itemHash === currencyHash)?.quantity || 0;
+        break;
+      default:
+        totalCoins[currencyHash] = _.sumBy(stores, (store) =>
+          amountOfItem(store, { hash: currencyHash }),
+        );
+        break;
+    }
+  }
   return totalCoins;
 }

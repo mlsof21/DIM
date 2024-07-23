@@ -1,182 +1,79 @@
-import { AssumeArmorMasterwork, LockArmorEnergyType } from '@destinyitemmanager/dim-api-types';
-import { PressTip } from 'app/dim-ui/PressTip';
+import { AssumeArmorMasterwork } from '@destinyitemmanager/dim-api-types';
+import RadioButtons, { Option } from 'app/dim-ui/RadioButtons';
 import { t } from 'app/i18next-t';
-import clsx from 'clsx';
-import React, { Dispatch, useMemo } from 'react';
+import { Dispatch, useCallback, useMemo } from 'react';
 import { LoadoutBuilderAction } from '../loadout-builder-reducer';
+import { loDefaultArmorEnergyRules } from '../types';
 import styles from './EnergyOptions.m.scss';
-
-interface Option {
-  label: string;
-  tooltip: string;
-  selected: boolean;
-  onChange(): void;
-}
-
-const RadioSetting = React.memo(function RadioSetting({
-  label,
-  name,
-  options,
-}: {
-  label: string;
-  name: string;
-  options: Option[];
-}) {
-  return (
-    <div className={styles.settingGroup}>
-      <div className={styles.title}>{label}</div>
-      <div className={styles.buttons}>
-        {options.map(({ label, selected, tooltip, onChange }) => (
-          <RadioButton
-            key={label}
-            label={label}
-            tooltip={tooltip}
-            selected={selected}
-            onChange={onChange}
-            name={name}
-          />
-        ))}
-      </div>
-    </div>
-  );
-});
-
-function RadioButton({ label, tooltip, name, selected, onChange }: Option & { name: string }) {
-  return (
-    <PressTip
-      tooltip={tooltip}
-      elementType="label"
-      className={clsx(styles.button, {
-        [styles.selected]: selected,
-      })}
-    >
-      <input type="radio" name={name} checked={selected} onChange={onChange} />
-      {label}
-    </PressTip>
-  );
-}
 
 export default function EnergyOptions({
   assumeArmorMasterwork,
-  lockArmorEnergyType,
-  optimizingLoadoutName,
   lbDispatch,
+  className,
 }: {
   assumeArmorMasterwork: AssumeArmorMasterwork | undefined;
-  lockArmorEnergyType: LockArmorEnergyType | undefined;
-  optimizingLoadoutName: string | undefined;
   lbDispatch: Dispatch<LoadoutBuilderAction>;
+  className?: string;
 }) {
-  const lockEnergyOptions: Option[] = useMemo(
-    () => [
-      {
-        label: t('LoadoutBuilder.None'),
-        tooltip: t('LoadoutBuilder.LockElementOptions.None'),
-        selected: !lockArmorEnergyType || lockArmorEnergyType === LockArmorEnergyType.None,
-        onChange: () => {
-          if (lockArmorEnergyType && lockArmorEnergyType !== LockArmorEnergyType.None) {
-            lbDispatch({
-              type: 'lockArmorEnergyTypeChanged',
-              lockArmorEnergyType: LockArmorEnergyType.None,
-            });
-          }
-        },
-      },
-      {
-        label:
-          optimizingLoadoutName !== undefined
-            ? t('LoadoutBuilder.InOtherLoadouts')
-            : t('LoadoutBuilder.InLoadouts'),
-        tooltip:
-          optimizingLoadoutName !== undefined
-            ? t('LoadoutBuilder.LockElementOptions.InOtherLoadouts', {
-                loadoutName: optimizingLoadoutName,
-              })
-            : t('LoadoutBuilder.LockElementOptions.InLoadouts'),
-        selected: lockArmorEnergyType === LockArmorEnergyType.Masterworked,
-        onChange: () => {
-          if (lockArmorEnergyType !== LockArmorEnergyType.Masterworked) {
-            lbDispatch({
-              type: 'lockArmorEnergyTypeChanged',
-              lockArmorEnergyType: LockArmorEnergyType.Masterworked,
-            });
-          }
-        },
-      },
-      {
-        label: t('LoadoutBuilder.All'),
-        tooltip: t('LoadoutBuilder.LockElementOptions.All'),
-        selected: lockArmorEnergyType === LockArmorEnergyType.All,
-        onChange: () => {
-          if (lockArmorEnergyType !== LockArmorEnergyType.All) {
-            lbDispatch({
-              type: 'lockArmorEnergyTypeChanged',
-              lockArmorEnergyType: LockArmorEnergyType.All,
-            });
-          }
-        },
-      },
-    ],
-    [lbDispatch, lockArmorEnergyType, optimizingLoadoutName]
-  );
+  // Note: These are only referenced via nesting in the tooltips below,
+  // so i18next-scanner would otherwise drop them if they didn't appear
+  // in the code.
+  // t('LoadoutBuilder.AssumeMasterworkOptions.Current')
+  // t('LoadoutBuilder.AssumeMasterworkOptions.Masterworked')
 
-  const assumeMasterworkOptions: Option[] = useMemo(
+  const assumeMasterworkOptions: Option<AssumeArmorMasterwork>[] = useMemo(
     () => [
       {
         label: t('LoadoutBuilder.None'),
-        tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.None'),
-        selected: !assumeArmorMasterwork || assumeArmorMasterwork === AssumeArmorMasterwork.None,
-        onChange: () => {
-          if (assumeArmorMasterwork && assumeArmorMasterwork !== AssumeArmorMasterwork.None) {
-            lbDispatch({
-              type: 'assumeArmorMasterworkChanged',
-              assumeArmorMasterwork: AssumeArmorMasterwork.None,
-            });
-          }
-        },
+        tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.None', {
+          minLoItemEnergy: loDefaultArmorEnergyRules.minItemEnergy,
+        }),
+        value: AssumeArmorMasterwork.None,
       },
       {
         label: t('LoadoutBuilder.Legendary'),
-        tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.Legendary'),
-        selected: assumeArmorMasterwork === AssumeArmorMasterwork.Legendary,
-        onChange: () => {
-          if (assumeArmorMasterwork !== AssumeArmorMasterwork.Legendary) {
-            lbDispatch({
-              type: 'assumeArmorMasterworkChanged',
-              assumeArmorMasterwork: AssumeArmorMasterwork.Legendary,
-            });
-          }
-        },
+        tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.Legendary', {
+          minLoItemEnergy: loDefaultArmorEnergyRules.minItemEnergy,
+        }),
+        value: AssumeArmorMasterwork.Legendary,
       },
       {
-        label: t('LoadoutBuilder.All'),
+        label: `+ ${t('LoadoutBuilder.MwExotic')}`, // used to be t('LoadoutBuilder.All')
         tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.All'),
-        selected: assumeArmorMasterwork === AssumeArmorMasterwork.All,
-        onChange: () => {
-          if (assumeArmorMasterwork !== AssumeArmorMasterwork.All) {
-            lbDispatch({
-              type: 'assumeArmorMasterworkChanged',
-              assumeArmorMasterwork: AssumeArmorMasterwork.All,
-            });
-          }
-        },
+        value: AssumeArmorMasterwork.All,
+      },
+      {
+        label: `+ ${t('LoadoutBuilder.Artifice')}`,
+        tooltip: t('LoadoutBuilder.AssumeMasterworkOptions.AllWithArtificeExotic'), // includes t('LoadoutBuilder.AssumeMasterworkOptions.ArtificeExotic')
+        value: AssumeArmorMasterwork.ArtificeExotic,
       },
     ],
-    [assumeArmorMasterwork, lbDispatch]
+    [],
   );
 
+  const handleChange = useCallback(
+    (assumeArmorMasterwork: AssumeArmorMasterwork) => {
+      lbDispatch({
+        type: 'assumeArmorMasterworkChanged',
+        assumeArmorMasterwork,
+      });
+    },
+    [lbDispatch],
+  );
+
+  const selected = assumeMasterworkOptions.find(
+    (o) => o.value === (assumeArmorMasterwork ?? AssumeArmorMasterwork.None),
+  )!;
+
   return (
-    <div className={styles.energyOptions}>
-      <RadioSetting
-        name="lockElement"
-        label={t('LoadoutBuilder.LockElement')}
-        options={lockEnergyOptions}
-      />
-      <RadioSetting
-        name="assumeMasterwork"
-        label={t('LoadoutBuilder.AssumeMasterwork')}
+    <div className={className}>
+      <h3 className={styles.title}>{t('LoadoutBuilder.AssumeMasterwork')}</h3>
+      <RadioButtons
+        value={assumeArmorMasterwork ?? AssumeArmorMasterwork.None}
+        onChange={handleChange}
         options={assumeMasterworkOptions}
       />
+      <div className={styles.tooltip}>{selected.tooltip}</div>
     </div>
   );
 }

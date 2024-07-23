@@ -11,22 +11,19 @@
     letter-spacing: normal !important;
     text-transform: none !important;
   }
-  a {
-    color: white;
+  :global(.dim-button) {
+    color: var(--theme-text);
     font-size: 12px;
+  }
+  p {
+    font-size: 14px;
   }
 }
 
-.twitterLinks {
+.links {
   composes: flexRow from '../dim-ui/common.m.scss';
   flex-wrap: wrap;
-  @include horizontal-space-children(8px);
-  gap: 8px 0;
-
-  :global(.fa-twitter) {
-    font-size: 1.5em;
-    vertical-align: bottom;
-  }
+  gap: 8px;
 }
 
 .errorCode {
@@ -36,17 +33,32 @@
   float: right;
 }
 
-.twitters {
+.socials {
   display: flex;
   flex-direction: row;
   justify-content: space-evenly;
+  gap: 16px;
 
   @include phone-portrait {
     flex-direction: column;
   }
+}
 
-  > div > div {
+.timeline {
+  box-sizing: border-box;
+  flex: 1;
+  position: relative;
+  border: 4px solid rgba(255, 255, 255, 0.3);
+
+  iframe {
+    width: 100%;
+    overflow: auto;
     height: 400px;
-    outline: 4px solid rgba(255, 255, 255, 0.3);
+    background-color: black;
+    border: none;
+
+    @include phone-portrait {
+      height: 300px;
+    }
   }
 }

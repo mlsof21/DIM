@@ -1,6 +1,5 @@
 import { AccountCurrency } from 'app/inventory/store-types';
 import { DestinyDisplayPropertiesDefinition } from 'bungie-api-ts/destiny2';
-import React from 'react';
 import { useSelector } from 'react-redux';
 import renderer from 'react-test-renderer';
 import AccountCurrencies from './AccountCurrencies';
@@ -66,7 +65,7 @@ jest.mock('react-redux', () => ({
 /** Render some currencies and assert that the right number of icons are rendered */
 function testCurrencies(currencies: AccountCurrency[]) {
   // This is a kind of hacky way to mock out redux
-  (useSelector as jest.Mock<AccountCurrency[]>).mockReturnValue(currencies);
+  (useSelector as unknown as jest.Mock<AccountCurrency[]>).mockReturnValue(currencies);
   const tree = renderer.create(<AccountCurrencies />);
   // We expect one image per currency
   expect(tree.root.findAllByType('img').length).toBe(currencies.length);

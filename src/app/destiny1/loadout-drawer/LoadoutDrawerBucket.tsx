@@ -1,6 +1,6 @@
 import 'app/inventory-page/StoreBucket.scss';
 import { InventoryBucket } from 'app/inventory/inventory-buckets';
-import { ResolvedLoadoutItem } from 'app/loadout-drawer/loadout-types';
+import { ResolvedLoadoutItem } from 'app/loadout/loadout-types';
 import { addIcon, AppIcon } from 'app/shell/icons';
 import clsx from 'clsx';
 import { BucketHashes } from 'data/d2/generated-enums';
@@ -19,9 +19,9 @@ export default function LoadoutDrawerBucket({
 }: {
   bucket: InventoryBucket;
   items: ResolvedLoadoutItem[];
-  pickLoadoutItem(bucket: InventoryBucket): void;
-  equip(resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent): void;
-  remove(resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent): void;
+  pickLoadoutItem: (bucket: InventoryBucket) => void;
+  equip: (resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent) => void;
+  remove: (resolvedItem: ResolvedLoadoutItem, e: React.MouseEvent) => void;
 }) {
   const [equippedItems, unequippedItems] = _.partition(items, (li) => li.loadoutItem.equip);
 

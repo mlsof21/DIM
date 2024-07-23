@@ -1,9 +1,5 @@
 {
-  "extends": [
-    "stylelint-config-standard-scss",
-    "stylelint-config-css-modules",
-    "stylelint-config-prettier"
-  ],
+  "extends": ["stylelint-config-standard-scss", "stylelint-config-css-modules"],
   "rules": {
     "alpha-value-notation": "number",
     "shorthand-property-no-redundant-values": null,
@@ -15,6 +11,7 @@
     "scss/comment-no-empty": null,
     "function-name-case": null,
     "function-calc-no-unspaced-operator": null,
+    "media-feature-range-notation": null,
     "declaration-empty-line-before": null,
     "custom-property-empty-line-before": null,
     "scss/no-global-function-names": null,
@@ -24,23 +21,33 @@
     "at-rule-no-unknown": null,
     "scss/at-rule-no-unknown": true,
     "media-feature-name-no-unknown": null,
+    "selector-not-notation": null,
     "selector-pseudo-class-no-unknown": [true, { "ignorePseudoClasses": ["horizontal", "global"] }],
     "hue-degree-notation": "number",
     "selector-id-pattern": "(^[a-z][a-zA-Z0-9]+$|^([a-z][a-z0-9]*)(-[a-z0-9]+)*$)",
     "selector-class-pattern": "(^[a-z][a-zA-Z0-9]+$|^([a-z][a-z0-9]*)(-[A-Za-z0-9]+)*$)",
     "scss/dollar-variable-pattern": "(^[a-z][a-zA-Z0-9]+$|^([a-z][a-z0-9]*)(-[a-z0-9]+)*$)",
-    "value-no-vendor-prefix": [true, { "ignoreValues": "box" }],
-    "declaration-property-value-disallowed-list": [
-      {
-        "display": ["contents"]
-      }
-    ],
+    "value-no-vendor-prefix": [true, { "ignoreValues": ["box"] }],
     "color-no-invalid-hex": true,
     "unit-no-unknown": true,
     "no-duplicate-selectors": true,
     "declaration-block-no-duplicate-properties": [
       true,
       { "ignore": ["consecutive-duplicates-with-different-values"] }
+    ],
+    "declaration-block-no-redundant-longhand-properties": [
+      true,
+      { "ignoreShorthands": ["/grid-template/"] }
+    ],
+    "scss/function-no-unknown": [
+      true,
+      { "ignoreFunctions": "/^dim-([a-z][a-z0-9]*)(-[a-z0-9]+)*$/" }
+    ],
+    "scss/at-function-pattern": [
+      "^dim-([a-z][a-z0-9]*)(-[a-z0-9]+)*$",
+      {
+        "message": "Expected function name to be kebab-case and prefixed with 'dim-'"
+      }
     ]
   }
 }

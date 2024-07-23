@@ -1,23 +1,17 @@
 import { getToken } from 'app/bungie-api/oauth-tokens';
-import { clarityDiscordLink, clarityLink, compendiumLink } from 'app/clarity/about';
+import { clarityDiscordLink, clarityLink } from 'app/clarity/about';
 import StaticPage from 'app/dim-ui/StaticPage';
 import { t } from 'app/i18next-t';
+import { isAppStoreVersion } from 'app/utils/browsers';
+import { usePageTitle } from 'app/utils/hooks';
+import { systemInfo } from 'app/utils/system-info';
+import logo from 'images/dimlogo.svg';
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import logo from '../../images/logo-light.svg';
 import ExternalLink from '../dim-ui/ExternalLink';
 import styles from './About.m.scss';
-import {
-  AppIcon,
-  faDiscord,
-  faGithub,
-  faReddit,
-  faTshirt,
-  faYoutube,
-  heartIcon,
-  helpIcon,
-  twitterIcon,
-} from './icons';
+import { AppIcon, faDiscord, faGithub, faTshirt, heartIcon, helpIcon, mastodonIcon } from './icons';
+import { dimHelpMastodonLink, dimMastodonAccount, discordLink, userGuideLink } from './links';
 
 const githubLinkDirect = 'https://github.com/DestinyItemManager/DIM/';
 const crowdinLinkDirect =
@@ -31,16 +25,16 @@ const crowdinLink = `<a href='${crowdinLinkDirect}' target='_blank' rel='noopene
 const bungieLink = `<a href='${bungieLinkDirect}' target='_blank' rel='noopener noreferrer'>Bungie.net</a>`;
 const openCollectiveLink = `<a href='${openCollectiveLinkDirect}' target='_blank' rel='noopener noreferrer'>OpenCollective</a>`;
 const storeLink = `<a href='${storeLinkDirect}' target='_blank' rel='noopener noreferrer'>DesignByHumans</a>`;
-const youTubeLink = 'https://www.youtube.com/channel/UCsNRmUfaeIi5Tk7U0mlZ6UQ';
-const twitterLink = 'https://twitter.com/ThisIsDIM';
-const redditLink = 'https://destinyitemmanager.reddit.com';
-const discordLink = 'https://discord.gg/UK2GWC7';
-const wikiLink = 'https://github.com/DestinyItemManager/DIM/wiki';
 
 export default function About() {
-  const iOSApp = document.cookie.includes('app-platform=iOS App Store;');
+  usePageTitle(t('Header.About'));
+  // The App Store version can't show donation links I guess?
+  const iOSApp = isAppStoreVersion();
 
   useEffect(() => {
+    if (iOSApp) {
+      return;
+    }
     const script = document.createElement('script');
 
     script.src =
@@ -71,10 +65,19 @@ export default function About() {
             })}
           </span>
         </Link>
+        <br />
+        <span>{systemInfo}</span> <Link to="/debug">Debug</Link>
       </div>
       <p>{t('Views.About.HowItsMade')}</p>
       {$DIM_FLAVOR === 'release' && <p>{t(`Views.About.Schedule.release`)}</p>}
       {$DIM_FLAVOR === 'beta' && <p>{t(`Views.About.Schedule.beta`)}</p>}
+      {$DIM_FLAVOR === 'pr' && (
+        <p>
+          <a href={`https://github.com/DestinyItemManager/DIM/pull${$PUBLIC_PATH}`}>
+            Pull Request #{$PUBLIC_PATH.replaceAll('/', '')}
+          </a>
+        </p>
+      )}
       <ul>
         <li>{t('Views.About.BungieCopyright')}</li>
         <li>
@@ -93,7 +96,6 @@ export default function About() {
           dangerouslySetInnerHTML={{
             __html: t('Views.About.CommunityInsight', {
               clarityLink,
-              compendiumLink,
               clarityDiscordLink,
             }),
           }}
@@ -104,7 +106,8 @@ export default function About() {
           <div>
             <h2>
               <ExternalLink href={openCollectiveLinkDirect}>
-                <AppIcon icon={heartIcon} /> {t('Views.Support.Support')}
+                <AppIcon icon={heartIcon} />
+                {t('Views.Support.Support')}
               </ExternalLink>
             </h2>
             <div
@@ -114,11 +117,21 @@ export default function About() {
             />
           </div>
         )}
+        <div>
+          <h2>
+            <ExternalLink href={userGuideLink}>
+              <AppIcon icon={helpIcon} />
+              {t('Views.About.Wiki')}
+            </ExternalLink>
+          </h2>
+          {t('Views.About.WikiHelp')} <br />
+        </div>
         {!iOSApp && (
           <div>
             <h2>
               <ExternalLink href={storeLinkDirect}>
-                <AppIcon icon={faTshirt} /> {t('Header.Shop')}
+                <AppIcon icon={faTshirt} />
+                {t('Header.Shop')}
               </ExternalLink>
             </h2>
             <div
@@ -130,51 +143,28 @@ export default function About() {
         )}
         <div>
           <h2>
-            <ExternalLink href={twitterLink}>
-              <AppIcon icon={twitterIcon} /> {t('Views.About.Twitter')}
-            </ExternalLink>
-          </h2>
-          {t('Views.About.TwitterHelp')} <br />
-          <ExternalLink href={twitterLink}>@ThisIsDIM</ExternalLink>
-        </div>
-        <div>
-          <h2>
-            <ExternalLink href={wikiLink}>
-              <AppIcon icon={helpIcon} /> {t('Views.About.Wiki')}
-            </ExternalLink>
-          </h2>
-          {t('Views.About.WikiHelp')} <br />
-        </div>
-        <div>
-          <h2>
-            <ExternalLink href={youTubeLink}>
-              <AppIcon icon={faYoutube} /> {t('Views.About.YouTube')}
-            </ExternalLink>
-          </h2>
-          {t('Views.About.YouTubeHelp')} <br />
-          <ExternalLink href={youTubeLink}>Destiny Item Manager</ExternalLink>
-        </div>
-        <div>
-          <h2>
-            <ExternalLink href={redditLink}>
-              <AppIcon icon={faReddit} /> {t('Views.About.Reddit')}
-            </ExternalLink>
-          </h2>
-          {t('Views.About.RedditHelp')} <br />
-          <ExternalLink href={redditLink}>/r/destinyitemmanager</ExternalLink>
-        </div>
-        <div>
-          <h2>
             <ExternalLink href={discordLink}>
-              <AppIcon icon={faDiscord} /> {t('Views.About.Discord')}
+              <AppIcon icon={faDiscord} />
+              {t('Views.About.Discord')}
             </ExternalLink>
           </h2>
           {t('Views.About.DiscordHelp')}
         </div>
         <div>
           <h2>
+            <ExternalLink href={dimHelpMastodonLink}>
+              <AppIcon icon={mastodonIcon} />
+              Mastodon
+            </ExternalLink>
+          </h2>
+          {t('Views.About.TwitterHelp')} <br />
+          <ExternalLink href={dimHelpMastodonLink}>{dimMastodonAccount}</ExternalLink>
+        </div>
+        <div>
+          <h2>
             <ExternalLink href={githubLinkDirect}>
-              <AppIcon icon={faGithub} /> {t('Views.About.GitHub')}
+              <AppIcon icon={faGithub} />
+              {t('Views.About.GitHub')}
             </ExternalLink>
           </h2>
           <div

@@ -1,6 +1,6 @@
 import { ThunkResult } from 'app/store/types';
-import { reportException } from 'app/utils/exceptions';
-import { HashLookupFailure, ManifestDefinitions } from '../destiny2/definitions';
+import { reportException } from 'app/utils/sentry';
+import { HashLookupFailure } from '../destiny2/definitions';
 import { setD1Manifest } from '../manifest/actions';
 import { getManifest } from '../manifest/d1-manifest-service';
 import {
@@ -23,7 +23,12 @@ import {
   D1VendorDefinition,
 } from './d1-manifest-types';
 
-const lazyTables = [
+const allTables = [
+  'InventoryBucket',
+  'Class',
+  'Race',
+  'Faction',
+  'Vendor',
   'InventoryItem',
   'Objective',
   'Stat',
@@ -36,16 +41,19 @@ const lazyTables = [
   'Activity',
   'ActivityType',
   'DamageType',
-];
-
-const eagerTables = ['InventoryBucket', 'Class', 'Race', 'Faction', 'Vendor'];
+] as const;
 
 export interface DefinitionTable<T> {
-  get(hash: number): T;
+  readonly get: (hash: number) => T;
+  readonly getAll: () => { [hash: number]: T };
 }
 
-// D1 types don't exist yet
-export interface D1ManifestDefinitions extends ManifestDefinitions {
+export interface D1ManifestDefinitions {
+  InventoryBucket: DefinitionTable<D1InventoryBucketDefinition>;
+  Class: DefinitionTable<D1ClassDefinition>;
+  Race: DefinitionTable<D1RaceDefinition>;
+  Faction: DefinitionTable<D1FactionDefinition>;
+  Vendor: DefinitionTable<D1VendorDefinition>;
   InventoryItem: DefinitionTable<D1InventoryItemDefinition>;
   Objective: DefinitionTable<D1ObjectiveDefinition>;
   Stat: DefinitionTable<D1StatDefinition>;
@@ -58,12 +66,8 @@ export interface D1ManifestDefinitions extends ManifestDefinitions {
   Activity: DefinitionTable<D1ActivityDefinition>;
   ActivityType: DefinitionTable<D1ActivityTypeDefinition>;
   DamageType: DefinitionTable<D1DamageTypeDefinition>;
-
-  InventoryBucket: { [hash: number]: D1InventoryBucketDefinition };
-  Class: { [hash: number]: D1ClassDefinition };
-  Race: { [hash: number]: D1RaceDefinition };
-  Faction: { [hash: number]: D1FactionDefinition };
-  Vendor: { [hash: number]: D1VendorDefinition };
+  /** Check if these defs are from D2. Inside an if statement, these defs will be narrowed to type D2ManifestDefinitions. */
+  readonly isDestiny2: false;
 }
 
 /**
@@ -71,27 +75,25 @@ export interface D1ManifestDefinitions extends ManifestDefinitions {
  * objet that has a property named after each of the tables listed
  * above (defs.TalentGrid, etc.).
  */
-export function getDefinitions(): ThunkResult<D1ManifestDefinitions> {
+export function getDefinitions(force = false): ThunkResult<D1ManifestDefinitions> {
   return async (dispatch, getState) => {
     let existingManifest = getState().manifest.d1Manifest;
-    if (existingManifest) {
+    if (existingManifest && !force) {
       return existingManifest;
     }
     const db = await dispatch(getManifest());
     existingManifest = getState().manifest.d1Manifest;
-    if (existingManifest) {
+    if (existingManifest && !force) {
       return existingManifest;
     }
-    const defs = {
-      isDestiny1: () => true,
-      isDestiny2: () => false,
+    const defs: { [table: string]: any; isDestiny2: false } = {
+      isDestiny2: false,
     };
-    // Load objects that lazily load their properties from the sqlite DB.
-    lazyTables.forEach((tableShort) => {
-      const table = `Destiny${tableShort}Definition`;
+    for (const tableShort of allTables) {
+      const table = `Destiny${tableShort}Definition` as const;
+      const dbTable = db[table];
       defs[tableShort] = {
-        get(id: number, requestor?: any) {
-          const dbTable = db[table];
+        get(id: number, requestor?: { hash: number } | string | number) {
           if (!dbTable) {
             throw new Error(`Table ${table} does not exist in the manifest`);
           }
@@ -107,13 +109,11 @@ export function getDefinitions(): ThunkResult<D1ManifestDefinitions> {
           }
           return dbEntry;
         },
+        getAll() {
+          return dbTable;
+        },
       };
-    });
-    // Resources that need to be fully loaded (because they're iterated over)
-    eagerTables.forEach((tableShort) => {
-      const table = `Destiny${tableShort}Definition`;
-      defs[tableShort] = db[table];
-    });
+    }
     dispatch(setD1Manifest(defs as D1ManifestDefinitions));
     return defs as D1ManifestDefinitions;
   };

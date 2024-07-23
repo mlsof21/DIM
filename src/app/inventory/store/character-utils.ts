@@ -1,11 +1,7 @@
 import { D1ManifestDefinitions } from 'app/destiny1/d1-definitions';
-import { D1CharacterResponse } from 'app/destiny1/d1-manifest-types';
+import { D1Character, D1StatLabel } from 'app/destiny1/d1-manifest-types';
 import { warnLog } from 'app/utils/log';
-import { DestinyClass } from 'bungie-api-ts/destiny2';
 import { StatHashes } from 'data/d2/generated-enums';
-import disciplineIcon from 'images/discipline.png';
-import intellectIcon from 'images/intellect.png';
-import strengthIcon from 'images/strength.png';
 import { DimCharacterStat } from '../store-types';
 
 // Cooldowns
@@ -29,27 +25,27 @@ export function getBonus(light: number, type: string): number {
       return light < 287
         ? 20
         : light < 300
-        ? 21
-        : light < 310
-        ? 22
-        : light < 319
-        ? 23
-        : light < 328
-        ? 24
-        : 25;
+          ? 21
+          : light < 310
+            ? 22
+            : light < 319
+              ? 23
+              : light < 328
+                ? 24
+                : 25;
     case 'leg':
     case 'leg armor':
       return light < 284
         ? 18
         : light < 298
-        ? 19
-        : light < 309
-        ? 20
-        : light < 319
-        ? 21
-        : light < 329
-        ? 22
-        : 23;
+          ? 19
+          : light < 309
+            ? 20
+            : light < 319
+              ? 21
+              : light < 329
+                ? 22
+                : 23;
     case 'classitem':
     case 'class items':
     case 'ghost':
@@ -60,22 +56,22 @@ export function getBonus(light: number, type: string): number {
       return light < 287
         ? 34
         : light < 295
-        ? 35
-        : light < 302
-        ? 36
-        : light < 308
-        ? 37
-        : light < 314
-        ? 38
-        : light < 319
-        ? 39
-        : light < 325
-        ? 40
-        : light < 330
-        ? 41
-        : light < 336
-        ? 42
-        : 43;
+          ? 35
+          : light < 302
+            ? 36
+            : light < 308
+              ? 37
+              : light < 314
+                ? 38
+                : light < 319
+                  ? 39
+                  : light < 325
+                    ? 40
+                    : light < 330
+                      ? 41
+                      : light < 336
+                        ? 42
+                        : 43;
   }
   warnLog('getBonus', 'item bonus not found', type);
   return 0;
@@ -94,7 +90,7 @@ export function getD1CharacterStatTiers(stat: DimCharacterStat) {
   return tiers;
 }
 
-const stats = [
+const stats: D1StatLabel[] = [
   'STAT_INTELLECT',
   'STAT_DISCIPLINE',
   'STAT_STRENGTH',
@@ -108,13 +104,13 @@ const stats = [
  */
 export function getCharacterStatsData(
   defs: D1ManifestDefinitions,
-  data: D1CharacterResponse['character']['base']['characterBase']
+  data: D1Character['characterBase'],
 ) {
   const ret: { [statHash: string]: DimCharacterStat } = {};
-  stats.forEach((statId) => {
+  for (const statId of stats) {
     const rawStat = data.stats[statId];
     if (!rawStat) {
-      return;
+      continue;
     }
 
     const stat: DimCharacterStat = {
@@ -122,20 +118,23 @@ export function getCharacterStatsData(
       value: rawStat.value,
       name: '',
       description: '',
+      icon: '',
     };
 
     switch (statId) {
       case 'STAT_INTELLECT':
         stat.effect = 'Super';
-        stat.icon = intellectIcon;
+        stat.icon = defs.Stat.get(StatHashes.Intellect).icon;
         break;
       case 'STAT_DISCIPLINE':
         stat.effect = 'Grenade';
-        stat.icon = disciplineIcon;
+        stat.icon = defs.Stat.get(StatHashes.Discipline).icon;
         break;
       case 'STAT_STRENGTH':
         stat.effect = 'Melee';
-        stat.icon = strengthIcon;
+        stat.icon = defs.Stat.get(StatHashes.Strength).icon;
+        break;
+      default:
         break;
     }
 
@@ -153,7 +152,7 @@ export function getCharacterStatsData(
     }
 
     ret[stat.hash] = stat;
-  });
+  }
   return ret;
 }
 
@@ -182,18 +181,5 @@ function getAbilityCooldown(subclass: number, ability: string, tier: number) {
       }
     default:
       return '-:--';
-  }
-}
-
-export function getClass(type: DestinyClass) {
-  switch (type) {
-    case DestinyClass.Titan:
-      return 'titan';
-    case DestinyClass.Hunter:
-      return 'hunter';
-    case DestinyClass.Warlock:
-      return 'warlock';
-    case DestinyClass.Unknown:
-      return 'unknown';
   }
 }

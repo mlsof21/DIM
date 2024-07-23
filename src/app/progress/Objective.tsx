@@ -1,5 +1,5 @@
 import { D1ObjectiveDefinition, D1ObjectiveProgress } from 'app/destiny1/d1-manifest-types';
-import RichDestinyText from 'app/dim-ui/RichDestinyText';
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import { t } from 'app/i18next-t';
 import {
   getValueStyle,
@@ -23,10 +23,14 @@ export default function Objective({
   objective,
   suppressObjectiveDescription,
   isTrialsPassage,
+  showHidden,
+  noCheckbox,
 }: {
   objective: DestinyObjectiveProgress | D1ObjectiveProgress;
   suppressObjectiveDescription?: boolean;
   isTrialsPassage?: boolean;
+  showHidden?: boolean;
+  noCheckbox?: boolean;
 }) {
   const defs = useDefinitions()!;
   const objectiveDef = defs.Objective.get(objective.objectiveHash);
@@ -50,16 +54,20 @@ export default function Objective({
     'completionValue' in objective ? objective.completionValue : objectiveDef.completionValue;
 
   const complete = 'complete' in objective ? objective.complete : objective.isComplete;
+  const isD2Def = 'progressDescription' in objectiveDef;
 
   const progressDescription =
     // D1 display description
-    ('displayDescription' in objectiveDef && objectiveDef.displayDescription) ||
-    (!suppressObjectiveDescription &&
-      'progressDescription' in objectiveDef &&
-      objectiveDef.progressDescription) ||
+    (!isD2Def && objectiveDef.displayDescription) ||
+    (!suppressObjectiveDescription && isD2Def && objectiveDef.progressDescription) ||
     (complete ? t('Objectives.Complete') : t('Objectives.Incomplete'));
 
   const valueStyle = getValueStyle(objectiveDef, progress, completionValue);
+  if (!showHidden && valueStyle === DestinyUnlockValueUIStyle.Hidden) {
+    return null;
+  }
+  const isDate = isD2Def && valueStyle === DestinyUnlockValueUIStyle.DateTime;
+
   if (valueStyle === DestinyUnlockValueUIStyle.Integer) {
     return (
       <div className="objective-row">
@@ -80,9 +88,10 @@ export default function Objective({
     isTrialsPassage && isFlawlessObjective(objective.objectiveHash) && !complete;
 
   const classes = clsx('objective-row', {
-    'objective-complete': complete && !showAsCounter,
+    'objective-complete': complete && !showAsCounter && !isDate,
     'objective-boolean': isBoolean,
     'passage-flawed': passageFlawed,
+    'date-time': isDate,
   });
 
   const progressBarStyle = {
@@ -93,9 +102,11 @@ export default function Objective({
 
   return (
     <div className={classes}>
-      {!showAsCounter && <div className="objective-checkbox" />}
+      {!noCheckbox && !showAsCounter && !isDate && <div className="objective-checkbox" />}
       <div className="objective-progress">
-        {!isBoolean && <div className="objective-progress-bar" style={progressBarStyle} />}
+        {!isBoolean && !isDate && (
+          <div className="objective-progress-bar" style={progressBarStyle} />
+        )}
         <div className="objective-description">
           <RichDestinyText text={progressDescription} />
         </div>
@@ -129,7 +140,7 @@ export function ObjectiveValue({
 
   switch (valueStyle) {
     case DestinyUnlockValueUIStyle.DateTime:
-      return <>{new Date(progress).toLocaleString()}</>;
+      return <>{new Date(progress * 1000).toLocaleString()}</>;
     case DestinyUnlockValueUIStyle.Percentage:
       if (completionValue === 100) {
         return <>{percent(progress / completionValue)}</>;
@@ -138,11 +149,11 @@ export function ObjectiveValue({
       }
       break;
     case DestinyUnlockValueUIStyle.ExplicitPercentage:
-      return <>{progress + '%'}</>;
+      return <>{`${progress}%`}</>;
     case DestinyUnlockValueUIStyle.FractionFloat:
       return <>{percent(progress * completionValue)}</>;
     case DestinyUnlockValueUIStyle.Multiplier:
-      return <>{progress.toLocaleString() + '𝗑'}</>;
+      return <>{`${progress.toLocaleString()}𝗑`}</>;
     case DestinyUnlockValueUIStyle.RawFloat:
       return <>{(progress / 100).toLocaleString()}</>;
     case DestinyUnlockValueUIStyle.TimeDuration:

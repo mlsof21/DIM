@@ -6,12 +6,19 @@ import { setMockProfileResponse } from 'app/inventory/actions';
 import { loadStores } from 'app/inventory/d2-stores';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { ThunkResult } from 'app/store/types';
-import { download } from 'app/utils/util';
-import React from 'react';
+import { download } from 'app/utils/download';
+import { errorMessage } from 'app/utils/errors';
+import { DestinyProfileResponse, ServerResponse } from 'bungie-api-ts/destiny2';
 import { DropzoneOptions } from 'react-dropzone';
 import { useSelector } from 'react-redux';
-import './settings.scss';
+import './SettingsPage.m.scss';
 
+/**
+ * Allow users to export their Destiny profile and send them to a dev for
+ * debugging. In dev mode, or if you run `enableMockProfile = true` in the
+ * console, you can use that saved JSON profile to debug the app using another
+ * person's data.
+ */
 export function TroubleshootingSettings() {
   const currentAccount = useSelector(currentAccountSelector);
   const dispatch = useThunkDispatch();
@@ -21,7 +28,7 @@ export function TroubleshootingSettings() {
       download(
         JSON.stringify(await getStores(currentAccount), null, '\t'),
         'profile-data.json',
-        'application/json'
+        'application/json',
       );
     }
   };
@@ -34,43 +41,48 @@ export function TroubleshootingSettings() {
     try {
       await dispatch(importMockProfileResponse(files[0]));
       await dispatch(loadStores());
+      // eslint-disable-next-line no-alert
       alert('succeeded');
     } catch (e) {
-      alert(e.message);
+      // eslint-disable-next-line no-alert
+      alert(errorMessage(e));
     }
   };
 
   return (
-    <section id="troubleshooting">
-      <div className="setting">
-        <button type="button" className="dim-button" onClick={saveProfileResponse}>
-          {t('Settings.ExportProfile')}
-        </button>
+    <>
+      <button type="button" className="dim-button" onClick={saveProfileResponse}>
+        {t('Settings.ExportProfile')}
+      </button>
 
-        {$DIM_FLAVOR === 'dev' && (
-          <FileUpload
-            title="Upload Profile Response JSON"
-            accept={{ 'application/json': ['.json'] }}
-            onDrop={importMockProfile}
-          />
-        )}
-      </div>
-    </section>
+      {($DIM_FLAVOR === 'dev' || window.enableMockProfile) && (
+        <FileUpload
+          title="Upload Profile Response JSON"
+          accept={{ 'application/json': ['.json'] }}
+          onDrop={importMockProfile}
+        />
+      )}
+    </>
   );
 }
 
 function importMockProfileResponse(file: File): ThunkResult {
   return async (dispatch) => {
     const fileText = await file.text();
-    let profileResponse = JSON.parse(fileText);
+    const profileResponseOrWrapped = JSON.parse(fileText) as
+      | DestinyProfileResponse
+      | ServerResponse<DestinyProfileResponse>;
     // if it's a full copy of the bnet Response wrapper, unwrap it
-    if (profileResponse?.Response?.profileInventory) {
-      profileResponse = profileResponse.Response;
+    let profileResponse: DestinyProfileResponse;
+    if ('Response' in profileResponseOrWrapped) {
+      profileResponse = profileResponseOrWrapped.Response;
+    } else {
+      profileResponse = profileResponseOrWrapped;
     }
     // if it doesn't look like it has what we need, throw
     if (!profileResponse?.profileInventory) {
-      throw 'uploaded profile response looks invalid';
+      throw new Error('uploaded profile response looks invalid');
     }
-    dispatch(setMockProfileResponse(JSON.stringify(profileResponse)));
+    dispatch(setMockProfileResponse(profileResponse));
   };
 }

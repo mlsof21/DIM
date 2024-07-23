@@ -1,6 +1,6 @@
 @use '../variables' as *;
 @use 'sass:string';
-@use '../dim-ui/PressTip.m.scss' as *;
+@use '../dim-ui/tooltip-mixins' as *;
 
 .objectives {
   margin: 4px 0;
@@ -58,6 +58,18 @@
   .cannotRollSection {
     @include tooltip-section-color($red);
   }
+  .automaticallyPickedSection {
+    @include tooltip-section-color($dim-brand);
+    border-radius: 0 0 $theme-tooltip-corner-radius $theme-tooltip-corner-radius;
+
+    // Re-define colors using accent if browser supports color-mix
+    @supports (background: color-mix(in srgb, black 50%, white)) {
+      &:not(:empty) {
+        color: color-mix(in srgb, var(--theme-accent-primary) 100%, white 100%);
+        background-color: color-mix(in srgb, var(--theme-accent-primary) 20%, black);
+      }
+    }
+  }
 }
 .tooltipExotic {
   @include tooltip-ribbon-color($exotic);
@@ -73,12 +85,8 @@
       display: inline-block;
       width: 6px;
       height: 11px;
-
-      // We need to encode the '#' prefix in the color in order to use it within the SVG.
-      /* prettier-ignore */
-      $escapedColorStr: '%23#{string.slice('#{$enhancedYellow}', 2)}';
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 18 33"><path d="M6,33 L6,16 L0,16 L9,0 L18,16 L12,16 L12,33 z" fill="#{$escapedColorStr}" /></svg>');
-      background-size: 6px 11px;
+      mask-image: url('images/enhancedArrow.svg');
+      background-color: $enhancedYellow;
       margin-right: 3px;
     }
   }
@@ -94,4 +102,28 @@
 }
 .tooltipElementStasis {
   @include tooltip-ribbon-color($stasis);
+}
+.tooltipElementStrand {
+  @include tooltip-ribbon-color($strand);
+}
+
+.plugStats {
+  display: grid;
+  grid-template: auto / auto 1fr;
+  column-gap: 4px;
+  margin-top: 4px;
+  > div {
+    &:nth-child(2n + 1) {
+      font-weight: bold;
+      justify-self: end;
+    }
+  }
+  img {
+    vertical-align: bottom;
+    margin-right: 2px;
+  }
+}
+
+.stackable {
+  margin-top: 4px;
 }

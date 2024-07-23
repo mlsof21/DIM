@@ -1,16 +1,15 @@
 import { DestinyVersion } from '@destinyitemmanager/dim-api-types';
 import {
-  D1ActivityComponent,
   D1FactionDefinition,
-  D1RecordBook,
+  D1GetAdvisorsResponse,
+  D1LevelProgression,
+  D1ProgressionStep,
 } from 'app/destiny1/d1-manifest-types';
 import {
   DestinyClass,
   DestinyColor,
   DestinyDisplayPropertiesDefinition,
-  DestinyProgression,
 } from 'bungie-api-ts/destiny2';
-import React from 'react';
 import { D1Item, DimItem } from './item-types';
 
 /**
@@ -36,6 +35,8 @@ export interface DimStore<Item = DimItem> {
   className: string;
   /** Localized gender. */
   gender: string;
+  /** The character's gender hash. */
+  genderHash?: number;
   /** Localized race. */
   race: string;
   /** Localized gender and race together. */
@@ -64,18 +65,12 @@ export interface DimStore<Item = DimItem> {
   level: number;
   /** Progress towards the next level (or "prestige level") */
   percentToNextLevel: number;
-  /** Power/light level. */
+  /** The Bungie.net-reported power level */
   powerLevel: number;
   /** The record corresponding to the currently equipped Title. */
   titleInfo?: DimTitle;
   /** Character stats. */
   stats: {
-    /** average of your highest simultaneously equippable gear with bonus fields for rich tooltip content and equippability warnings */
-    maxGearPower?: DimCharacterStat;
-    /** currently represents the power level bonus provided by the Seasonal Artifact */
-    powerModifier?: DimCharacterStat;
-    /** maxGearPower + powerModifier. the highest PL you can get your inventory screen to show */
-    maxTotalPower?: DimCharacterStat;
     [hash: number]: DimCharacterStat;
   };
   /** Did any of the items in the last inventory build fail? */
@@ -84,6 +79,7 @@ export interface DimStore<Item = DimItem> {
 
 export interface DimTitle {
   title: string;
+  isCompleted: boolean;
   gildedNum: number;
   isGildedForCurrentSeason: boolean;
 }
@@ -95,6 +91,28 @@ export interface AccountCurrency {
   readonly quantity: number;
 }
 
+export type DimCharacterStatSource = 'armorStats' | 'armorPlug' | 'subclassPlug' | 'runtimeEffect';
+export const statSourceOrder: DimCharacterStatSource[] = [
+  'armorStats',
+  'subclassPlug',
+  'armorPlug',
+  'runtimeEffect',
+];
+export interface DimCharacterStatChange {
+  /** What contributed this stat. */
+  source: DimCharacterStatSource;
+  /** The name of the thing that contributed this stat. */
+  name: string;
+  /** A unique key for merging and display */
+  hash: number;
+  /** The icon associated with the source (subclass plug icon, armor mod icon...) */
+  icon: string | undefined;
+  /** How many copies of a mod were used */
+  count: number | undefined;
+  /** How many stat points this contributes to the stat's total value. */
+  value: number;
+}
+
 /** A character-level stat. */
 export interface DimCharacterStat {
   /** The DestinyStatDefinition hash for the stat. */
@@ -102,36 +120,38 @@ export interface DimCharacterStat {
   /** The localized name of the stat. */
   name: string;
   /** An icon associated with the stat. */
-  icon?: string;
+  icon: string;
   /** The current value of the stat. */
   value: number;
 
   /** The localized description of the stat. */
   description: string;
 
-  /** maxGearPower and maxTotalPower can come with various caveats */
-  statProblems?: {
-    /** this stat may be inaccurate because it relies on classified items */
-    hasClassified?: boolean;
-    /** mutually excluded exotics are included in the max possible power */
-    notEquippable?: boolean;
-    /** this character is in danger of dropping at a worse Power Level! another character is holding their best item(s) */
-    notOnStore?: boolean;
-  };
-
-  /** additional rich content available to display in a stat's tooltip */
-  richTooltip?: React.ReactChild;
-
   /** A localized description of this stat's effect. */
-  effect?: string;
+  effect?: 'Grenade' | 'Melee' | 'Super';
   /** Cooldown time for the associated ability. */
   cooldown?: string;
+
+  /** How this stat exactly was calculated. */
+  breakdown?: DimCharacterStatChange[];
 }
 
-export interface D1Progression extends DestinyProgression {
-  /** The faction definition associated with this progress. */
-  faction: D1FactionDefinition;
+export interface D1Progression extends D1LevelProgression {
+  name: string;
+  scope: number;
+  repeatLastStep: boolean;
+  steps: D1ProgressionStep[];
+  visible: boolean;
+  hash: number;
+  index: number;
+  redacted: boolean;
+  identifier?: string;
+  icon?: string;
+  label?: string;
   order: number;
+  faction: D1FactionDefinition;
+  description?: string;
+  source?: string;
 }
 
 /**
@@ -139,10 +159,5 @@ export interface D1Progression extends DestinyProgression {
  */
 export interface D1Store extends DimStore<D1Item> {
   progressions: D1Progression[];
-
-  // TODO: shape?
-  advisors: {
-    recordBooks?: D1RecordBook[];
-    activities?: { [activityId: string]: D1ActivityComponent };
-  };
+  advisors: D1GetAdvisorsResponse['data'];
 }

@@ -7,15 +7,14 @@ import { HttpClient, HttpClientConfig } from 'bungie-api-ts/http';
 import _ from 'lodash';
 import { DimItem } from '../inventory/item-types';
 import { DimStore } from '../inventory/store-types';
-import { fetchWithBungieOAuth } from './authenticated-fetch';
+import { FatalTokenError, fetchWithBungieOAuth } from './authenticated-fetch';
 import { API_KEY } from './bungie-api-utils';
 import {
   BungieError,
+  HttpStatusError,
   createFetchWithNonStoppingTimeout,
   createHttpClient,
-  HttpStatusError,
   responsivelyThrottleHttpClient,
-  sentryTraceHttpClient,
 } from './http-client';
 import { rateLimitedFetch } from './rate-limiter';
 
@@ -34,7 +33,7 @@ const notifyTimeout = _.throttle(
     }
   },
   5 * 60 * 1000, // 5 minutes
-  { leading: true, trailing: false }
+  { leading: true, trailing: false },
 );
 
 const logThrottle = (timesThrottled: number, waitTime: number, url: string) =>
@@ -45,46 +44,37 @@ const logThrottle = (timesThrottled: number, waitTime: number, url: string) =>
     'times, waiting',
     waitTime,
     'ms before calling',
-    url
+    url,
   );
 
 // it would be really great if they implemented the pipeline operator soon
 /** used for most Bungie API requests */
 export const authenticatedHttpClient = dimErrorHandledHttpClient(
   responsivelyThrottleHttpClient(
-    sentryTraceHttpClient(
-      createHttpClient(
-        createFetchWithNonStoppingTimeout(
-          rateLimitedFetch(fetchWithBungieOAuth),
-          TIMEOUT,
-          notifyTimeout
-        ),
-        API_KEY,
-        true
-      )
+    createHttpClient(
+      createFetchWithNonStoppingTimeout(
+        rateLimitedFetch(fetchWithBungieOAuth),
+        TIMEOUT,
+        notifyTimeout,
+      ),
+      API_KEY,
     ),
-    logThrottle
-  )
+    logThrottle,
+  ),
 );
 
 /** used to get manifest and global alerts */
 export const unauthenticatedHttpClient = dimErrorHandledHttpClient(
   responsivelyThrottleHttpClient(
-    sentryTraceHttpClient(
-      createHttpClient(
-        createFetchWithNonStoppingTimeout(fetch, TIMEOUT, notifyTimeout),
-        API_KEY,
-        false
-      )
-    ),
-    logThrottle
-  )
+    createHttpClient(createFetchWithNonStoppingTimeout(fetch, TIMEOUT, notifyTimeout), API_KEY),
+    logThrottle,
+  ),
 );
 
 /**
  * wrap HttpClient in handling specific to DIM, using i18n strings, bounce to login, etc
  */
-export function dimErrorHandledHttpClient(httpClient: HttpClient): HttpClient {
+function dimErrorHandledHttpClient(httpClient: HttpClient): HttpClient {
   return async (config: HttpClientConfig) => {
     try {
       return await httpClient(config);
@@ -97,7 +87,7 @@ export function dimErrorHandledHttpClient(httpClient: HttpClient): HttpClient {
 /**
  * if HttpClient throws an error (js, Bungie, http) this enriches it with DIM concepts and then re-throws it
  */
-export function handleErrors(error: Error) {
+function handleErrors(error: unknown): never {
   if (error instanceof DOMException && error.name === 'AbortError') {
     throw (
       navigator.onLine
@@ -117,6 +107,10 @@ export function handleErrors(error: Error) {
         ? new DimError('BungieService.NotConnectedOrBlocked')
         : new DimError('BungieService.NotConnected')
     ).withError(error);
+  }
+
+  if (error instanceof FatalTokenError) {
+    throw new DimError('BungieService.NotLoggedIn').withError(error);
   }
 
   if (error instanceof HttpStatusError) {
@@ -146,7 +140,7 @@ export function handleErrors(error: Error) {
       t('BungieService.NetworkError', {
         status: error.status,
         statusText: error.message,
-      })
+      }),
     ).withError(error);
   }
 
@@ -158,10 +152,7 @@ export function handleErrors(error: Error) {
 
       case PlatformErrorCodes.AuthorizationCodeInvalid:
       case PlatformErrorCodes.AccessNotPermittedByApplicationScope:
-        throw new DimError(
-          'BungieService.AppNotPermitted',
-          'DIM does not have permission to perform this action.'
-        ).withError(error);
+        throw new DimError('BungieService.AppNotPermitted').withError(error);
 
       case PlatformErrorCodes.SystemDisabled:
         throw new DimError('BungieService.Maintenance').withError(error);
@@ -194,7 +185,7 @@ export function handleErrors(error: Error) {
       // These just need a custom error message because people ask questions all the time
       case PlatformErrorCodes.DestinyCannotPerformActionAtThisLocation:
         throw new DimError('BungieService.DestinyCannotPerformActionAtThisLocation').withError(
-          error
+          error,
         );
       case PlatformErrorCodes.DestinyItemUnequippable:
         throw new DimError('BungieService.DestinyItemUnequippable').withError(error);
@@ -213,7 +204,7 @@ export function handleErrors(error: Error) {
       default: {
         throw new DimError(
           'BungieService.UnknownError',
-          t('BungieService.UnknownError', { message: error.message })
+          t('BungieService.UnknownError', { message: error.message }),
         ).withError(error);
       }
     }
@@ -225,12 +216,11 @@ export function handleErrors(error: Error) {
 }
 
 // Handle "DestinyUniquenessViolation" (1648)
-export function handleUniquenessViolation(
-  error: BungieError,
-  item: DimItem,
-  store: DimStore
-): never {
-  if (error?.code === PlatformErrorCodes.DestinyUniquenessViolation) {
+export function handleUniquenessViolation(error: unknown, item: DimItem, store: DimStore): never {
+  if (
+    error instanceof BungieError &&
+    error.code === PlatformErrorCodes.DestinyUniquenessViolation
+  ) {
     throw new DimError(
       'BungieService.ItemUniquenessExplanation',
       t('BungieService.ItemUniquenessExplanation', {
@@ -238,7 +228,7 @@ export function handleUniquenessViolation(
         type: item.type.toLowerCase(),
         character: store.name,
         context: store.genderName,
-      })
+      }),
     ).withError(error);
   }
   throw error;

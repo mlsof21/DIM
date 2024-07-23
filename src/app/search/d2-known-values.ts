@@ -1,4 +1,7 @@
-import { DestinyEnergyType, TierType } from 'bungie-api-ts/destiny2';
+import { CustomStatWeights } from '@destinyitemmanager/dim-api-types';
+import { HashLookup } from 'app/utils/util-types';
+import { TierType } from 'bungie-api-ts/destiny2';
+
 import {
   BreakerTypeHashes,
   BucketHashes,
@@ -18,6 +21,7 @@ export const d2MissingIcon = '/img/misc/missing_icon_d2.png';
 //
 
 export const MAX_ARMOR_ENERGY_CAPACITY = 10;
+export const MASTERWORK_ARMOR_STAT_BONUS = 2;
 
 //
 // SOCKETS KNOWN VALUES
@@ -36,6 +40,9 @@ export const DEFAULT_ORNAMENTS: number[] = [
   702981643, // InventoryItem "Default Ornament" Restores your armor to its default appearance.
 ];
 
+/** a weird set of 3 solstice ornaments that provide a single resilience stat point */
+export const statfulOrnaments = [4245469491, 2978747767, 2287277682];
+
 /** if a socket contains these, consider it empty */
 export const emptySocketHashes = [
   2323986101, // InventoryItem "Empty Mod Socket"
@@ -46,34 +53,39 @@ export const emptySocketHashes = [
 ];
 
 export const armor2PlugCategoryHashesByName = {
-  general: PlugCategoryHashes.EnhancementsV2General,
   helmet: PlugCategoryHashes.EnhancementsV2Head,
   gauntlets: PlugCategoryHashes.EnhancementsV2Arms,
   chest: PlugCategoryHashes.EnhancementsV2Chest,
   leg: PlugCategoryHashes.EnhancementsV2Legs,
   classitem: PlugCategoryHashes.EnhancementsV2ClassItem,
+  general: PlugCategoryHashes.EnhancementsV2General,
 } as const;
 
 /** The consistent armour 2 mod category hashes. This excludes raid, combat and legacy slots as they tend to change. */
 export const armor2PlugCategoryHashes: number[] = Object.values(armor2PlugCategoryHashesByName);
 
-export const killTrackerObjectivesByHash: Record<number, 'pvp' | 'pve' | undefined> = {
-  74070459: 'pvp', // Objective "Crucible Opponents Defeated" found inside InventoryItem[38912240] "Crucible Tracker"
-  1501870536: 'pvp', // Objective "Crucible Opponents Defeated" found inside InventoryItem[2285636663] "Crucible Tracker"
-  2439952408: 'pvp', // Objective "Crucible Opponents Defeated" found inside InventoryItem[3244015567] "Crucible Tracker"
-  73837075: 'pve', // Objective "Enemies Defeated" found inside InventoryItem[905869860] "Kill Tracker"
-  90275515: 'pve', // Objective "Enemies Defeated" found inside InventoryItem[2240097604] "Kill Tracker"
-  2579044636: 'pve', // Objective "Enemies Defeated" found inside InventoryItem[2302094943] "Kill Tracker"
-  2285418970: undefined, //
+export const killTrackerObjectivesByHash: HashLookup<'pvp' | 'pve' | 'gambit'> = {
+  1501870536: 'pvp', // Objective "Crucible Opponents Defeated" inside 2285636663 "Crucible Tracker"
+  2439952408: 'pvp', // Objective "Crucible Opponents Defeated" inside 3244015567 "Crucible Tracker"
+  74070459: 'pvp', // Objective "Crucible Opponents Defeated" inside 38912240 "Crucible Tracker"
+  890482414: 'pvp', // Objective "Crucible opponents defeated" inside 1187045864 "Crucible Memento Tracker"
+  90275515: 'pve', // Objective "Enemies Defeated" inside 2240097604 "Kill Tracker"
+  2579044636: 'pve', // Objective "Enemies Defeated" inside 2302094943 "Kill Tracker"
+  73837075: 'pve', // Objective "Enemies Defeated" inside 905869860 "Kill Tracker"
+  345540971: 'gambit', // Objective "Gambit targets defeated" inside 3915764593 "Gambit Memento Tracker"
+  3387796140: 'pve', // Objective "Nightfall combatants defeated" inside 3915764594 "Nightfall Memento Tracker"
+  2109364169: 'pvp', // Objective "Trials opponents defeated" inside 3915764595 "Trials Memento Tracker"
 };
 export const killTrackerSocketTypeHash = 1282012138;
 
 export const weaponMasterworkY2SocketTypeHash = 2218962841;
 
-export const universalOrnamentPlugSetHashes: number[] = [
-  26360131, 71785814, 709078552, 1133647128, 1323117612, 1742798175, 2093871133, 2203626505,
-  2425516788, 2568801218, 2733810650, 3024995628, 3479876793, 4014441445, 4178224051,
-];
+export const enum GhostActivitySocketTypeHashes {
+  /* Available once the Ghost shell has been fully Masterworked. */
+  Locked = 456763785, // SocketType "Activity Ghost Mod"
+  /* Activity mods provide additional currency and material rewards in various activities. */
+  Unlocked = 2899644539, // SocketType "Activity Ghost Mod"
+}
 
 //
 // STATS KNOWN VALUES
@@ -81,7 +93,7 @@ export const universalOrnamentPlugSetHashes: number[] = [
 
 /** the stat hash for DIM's artificial armor stat, "Total" */
 export const TOTAL_STAT_HASH = -1000;
-export const CUSTOM_TOTAL_STAT_HASH = -1100;
+export const CUSTOM_TOTAL_STAT_HASH = -111000;
 
 /** hashes representing D2 PL stats */
 export const D2LightStats = [StatHashes.Attack, StatHashes.Defense, StatHashes.Power];
@@ -94,10 +106,16 @@ export const D2ArmorStatHashByName = {
   discipline: StatHashes.Discipline,
   intellect: StatHashes.Intellect,
   strength: StatHashes.Strength,
-};
+} as const;
 
 /** Stats that all (D2) armor should have. */
 export const armorStats = Object.values(D2ArmorStatHashByName);
+
+// a set of base stat weights, all worth the same, "switched on"
+export const evenStatWeights = /* @__PURE__ */ armorStats.reduce<CustomStatWeights>(
+  (o, statHash) => ({ ...o, [statHash]: 1 }),
+  {},
+);
 
 export const D2WeaponStatHashByName = {
   rpm: StatHashes.RoundsPerMinute,
@@ -136,12 +154,11 @@ export const swordStatsByName = {
 
 /** D2 has these item types but D1 doesn't */
 export const D2ItemCategoryHashesByName = {
-  grenadelauncher: ItemCategoryHashes.GrenadeLaunchers,
+  heavygrenadelauncher: ItemCategoryHashes.GrenadeLaunchers,
   specialgrenadelauncher: -ItemCategoryHashes.GrenadeLaunchers,
   tracerifle: ItemCategoryHashes.TraceRifles,
   linearfusionrifle: ItemCategoryHashes.LinearFusionRifles,
   submachine: ItemCategoryHashes.SubmachineGuns,
-  smg: ItemCategoryHashes.SubmachineGuns,
   bow: ItemCategoryHashes.Bows,
   glaive: ItemCategoryHashes.Glaives,
   transmat: ItemCategoryHashes.ShipModsTransmatEffects,
@@ -150,32 +167,18 @@ export const D2ItemCategoryHashesByName = {
   reptoken: ItemCategoryHashes.ReputationTokens,
 };
 
-/** powerful rewards listed in quests or bounties */
-// TODO: generate in d2ai
-export const powerfulSources = [
-  993006552, // InventoryItem "Luminous Crucible Engram"
-  1204101093, // InventoryItem "Luminous Vanguard Engram"
-  1800172820, // InventoryItem "Luminous Vanguard Engram"
-  2481239683, // InventoryItem "Luminous Vanguard Engram"
-  2484791497, // InventoryItem "Luminous Planetary Engram"
-  2558839803, // InventoryItem "Luminous Planetary Engram"
-  2566956006, // InventoryItem "Luminous Crucible Engram"
-  2646629159, // InventoryItem "Luminous Engram"
-  2770239081, // InventoryItem "Luminous Crucible Engram"
-  3829523414, // InventoryItem "Luminous Planetary Engram"
-  4143344829, // InventoryItem "Luminous Engram"
-  4039143015, // InventoryItem "Powerful Gear"
-  4249081773, // InventoryItem "Powerful Armor"
-  73143230, // Pinnacle
-  3114385605, // Tier 1
-  4039143015, // Powerful
-  3114385606, // Tier 2
-  3114385607, // Tier 3
+export const pinnacleSources = [
+  73143230, // InventoryItem "Pinnacle Gear"
 ];
 
-export const pinnacleSources = [
-  73143230, // Pinnacle
-];
+/** The premium Eververse currency */
+export const silverItemHash = 3147280338; // InventoryItem "Silver"
+
+// Deepsight harmonizer currency for extracting weapon patterns
+export const DEEPSIGHT_HARMONIZER = 2228452164;
+
+// For loadout mods obliterated from the defs, we instead return this def
+export const deprecatedPlaceholderArmorModHash = 3947616002; // InventoryItem "Deprecated Armor Mod"
 
 //
 // BUCKETS KNOWN VALUES
@@ -188,13 +191,8 @@ export const pinnacleSources = [
  */
 export const THE_FORBIDDEN_BUCKET = 2422292810;
 
-export const armorBuckets = {
-  helmet: BucketHashes.Helmet,
-  gauntlets: BucketHashes.Gauntlets,
-  chest: BucketHashes.ChestArmor,
-  leg: BucketHashes.LegArmor,
-  classitem: BucketHashes.ClassArmor,
-};
+/** FOTL shrouded pages end up in here, for some reason */
+export const SOME_OTHER_DUMMY_BUCKET = 3621873013;
 
 // these aren't really normal equipment,
 // like you can have 1 equipped but it's glued to the character.
@@ -210,8 +208,15 @@ export const uniqueEquipBuckets = [
 // PRESENTATION NODE KNOWN VALUES
 //
 
-export const RAID_NODE = 4025982223;
-export const SHADER_NODE = 1516796296;
+export const RAID_NODE = 4025982223; // PresentationNode "Raids"
+export const SHADER_NODE = 1516796296; // PresentationNode "Shaders"
+export const ARMOR_NODE = 1605042242; // PresentationNode "Armor"
+
+/** Just to grab the string Universal Ornaments */
+export const UNIVERSAL_ORNAMENTS_NODE = 3655910122; // PresentationNode "Universal Ornaments"
+
+/** The emblem metrics Account parent node, used as a fallback for orphaned metrics */
+export const METRICS_ACCOUNT_NODE = 2875839731; // PresentationNode "Account"
 
 //
 // MISC KNOWN HASHES / ENUMS
@@ -228,47 +233,25 @@ export const RAID_MILESTONE_HASHES = [
   2712317338, // Milestone "Garden of Salvation" has no associated activities to check for raid-ness
 ];
 
-export const VENDORS = {
-  /** "The Spider", from whom we calculate planetmat info */
-  SPIDER: 863940356,
-  EVERVERSE: 3361454721,
-  BENEDICT: 1265988377,
-  BANSHEE: 672118013,
-  DRIFTER: 248695599,
-  ADA_FORGE: 2917531897,
-  ADA_TRANSMOG: 350061650,
+export const enum VendorHashes {
+  Eververse = 3361454721,
+  Benedict = 1265988377,
+  Banshee = 672118013,
+  Drifter = 248695599,
+  AdaForge = 2917531897,
+  AdaTransmog = 350061650,
   /** rahool. we override how his vendor FakeItems are displayed */
-  RAHOOL: 2255782930,
-  VAULT: 1037843411,
-  XUR: 2190858386,
-  WAR_TABLE_UPGRADES_RISEN: 3950870173,
-  STAR_CHART_UPGRADES_PLUNDER: 3004285529,
-  /**
-   * this has always been named "The Gate Lord's Eye" from season 8,
-   * but every season this vendor is updated with the new contents
-   * of that season's artifact
-   */
-  ARTIFACT: 2894222926,
-};
+  Rahool = 2255782930,
+  Vault = 1037843411,
+  Xur = 2190858386,
+  DevrimKay = 396892126,
+  Failsafe = 1576276905,
+  RivensWishesExotics = 2388521577,
+  XurLegendaryItems = 3751514131, // Vendor "Strange Gear Offers"
+}
 
 /** used to snag the icon for display */
-export const WELL_RESTED_PERK = 2352765282;
-
-/** an "All" trait we want to filter out of trait lists */
-export const ALL_TRAIT = 1434215347;
-
-/** the trait hash that is used to identify Exotic weapon catalyst plugs */
-export const EXOTIC_CATALYST_TRAIT = 1505531793;
-
-export const energyNamesByEnum: Record<DestinyEnergyType, string> = {
-  [DestinyEnergyType.Any]: 'any',
-  [DestinyEnergyType.Arc]: 'arc',
-  [DestinyEnergyType.Thermal]: 'solar',
-  [DestinyEnergyType.Void]: 'void',
-  [DestinyEnergyType.Ghost]: 'ghost',
-  [DestinyEnergyType.Subclass]: 'subclass',
-  [DestinyEnergyType.Stasis]: 'stasis',
-};
+export const WELL_RESTED_PERK = 2352765282; // SandboxPerk "Well-Rested"
 
 /**
  * Maps TierType to tierTypeName in English and vice versa.
@@ -293,9 +276,14 @@ export const D2ItemTiers = {
   [TierType.Exotic]: 'Exotic',
 } as const;
 
-export type ItemTierName = keyof typeof D2ItemTiers & string;
-
-export const energyCapacityTypeNames = Object.values(energyNamesByEnum);
+export type ItemTierName =
+  | 'Unknown'
+  | 'Currency'
+  | 'Common'
+  | 'Uncommon'
+  | 'Rare'
+  | 'Legendary'
+  | 'Exotic';
 
 export const breakerTypes = {
   any: [BreakerTypeHashes.Stagger, BreakerTypeHashes.Disruption, BreakerTypeHashes.ShieldPiercing],
@@ -308,12 +296,11 @@ export const breakerTypes = {
   stagger: [BreakerTypeHashes.Stagger],
 };
 
-export const modsWithConditionalStats = {
-  powerfulFriends: 1484685887,
-  radiantLight: 2979815167,
-  chargeHarvester: 2263321587,
-  elementalCapacitor: 3511092054,
-  echoOfPersistence: 2272984671,
-  enhancedElementalCapacitor: 711234314,
-  sparkOfFocus: 1727069360,
-} as const;
+export const enum ModsWithConditionalStats {
+  ElementalCapacitor = 3511092054, // InventoryItem "Elemental Capacitor"
+  EchoOfPersistence = 2272984671, // InventoryItem "Echo of Persistence"
+  EnhancedElementalCapacitor = 711234314, // InventoryItem "Elemental Capacitor"
+  SparkOfFocus = 1727069360, // InventoryItem "Spark of Focus"
+}
+
+export const ARTIFICE_PERK_HASH = 3727270518; // InventoryItem "Artifice Armor"

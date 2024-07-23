@@ -2,8 +2,10 @@
 // Please do not change this file!
 interface CssExports {
   'classIcon': string;
+  'clearButton': string;
   'info': string;
   'item': string;
+  'list': string;
   'title': string;
 }
 export const cssExports: CssExports;

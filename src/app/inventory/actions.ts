@@ -1,30 +1,42 @@
 import { DestinyAccount } from 'app/accounts/destiny-account';
 import { currentAccountSelector } from 'app/accounts/selectors';
-import { D2ManifestDefinitions } from 'app/destiny2/d2-definitions';
 import { apiPermissionGrantedSelector } from 'app/dim-api/selectors';
 import { t } from 'app/i18next-t';
 import { showNotification } from 'app/notifications/notifications';
 import { get } from 'app/storage/idb-keyval';
 import { ThunkResult } from 'app/store/types';
+import { infoLog, warnLog } from 'app/utils/log';
 import {
   DestinyColor,
   DestinyItemChangeResponse,
   DestinyProfileResponse,
 } from 'bungie-api-ts/destiny2';
 import { createAction } from 'typesafe-actions';
-import { TagValue } from './dim-item-info';
-import { InventoryBuckets } from './inventory-buckets';
+import { TagCommand, TagValue } from './dim-item-info';
 import { DimItem } from './item-types';
+import { appendedToNote, removedFromNote } from './note-hashtags';
+import { notesSelector } from './selectors';
 import { AccountCurrency, DimCharacterStat, DimStore } from './store-types';
+import { ItemCreationContext } from './store/d2-item-factory';
 
 /**
- * Update the current profile (D2 only) and the computed/massaged state of inventory, plus account-wide info like currencies.
+ * Update the computed/massaged state of inventory, plus account-wide info like currencies.
  */
 export const update = createAction('inventory/UPDATE')<{
   stores: DimStore[];
   currencies: AccountCurrency[];
-  profileResponse?: DestinyProfileResponse;
 }>();
+
+/**
+ * Remove the loaded stores to force them to be recomputed on the next load (used when changing language).
+ */
+export const clearStores = createAction('inventory/CLEAR_STORES')();
+
+export const profileLoaded = createAction('inventory/PROFILE_LOADED')<{
+  profile: DestinyProfileResponse;
+  live: boolean;
+}>();
+export const profileError = createAction('inventory/PROFILE_ERROR')<Error | undefined>();
 
 export interface CharacterInfo {
   characterId: string;
@@ -45,7 +57,7 @@ export interface CharacterInfo {
 export const charactersUpdated = createAction('inventory/CHARACTERS')<CharacterInfo[]>();
 
 /**
- * Reflect the old stores service data into the Redux store as a migration aid.
+ * An error that occurred during building the stores
  */
 export const error = createAction('inventory/ERROR')<Error>();
 
@@ -65,10 +77,9 @@ export const itemMoved = createAction('inventory/MOVE_ITEM')<{
  * We need to update the inventory with the updated item and any removed/added items.
  */
 export const awaItemChanged = createAction('inventory/AWA_CHANGE')<{
-  item: DimItem | null;
+  item: DimItem | undefined;
   changes: DestinyItemChangeResponse;
-  defs: D2ManifestDefinitions;
-  buckets: InventoryBuckets;
+  itemCreationContext: ItemCreationContext;
 }>();
 
 /*
@@ -111,6 +122,7 @@ export const setItemTag = createAction('tag_notes/SET_TAG')<{
   /** Item instance ID */
   itemId: string;
   tag?: TagValue;
+  craftedDate?: number;
 }>();
 
 export const setItemTagsBulk = createAction('tag_notes/SET_TAG_BULK')<
@@ -118,6 +130,7 @@ export const setItemTagsBulk = createAction('tag_notes/SET_TAG_BULK')<
     /** Item instance ID */
     itemId: string;
     tag?: TagValue;
+    craftedDate?: number;
   }[]
 >();
 
@@ -125,6 +138,7 @@ export const setItemNote = createAction('tag_notes/SET_NOTE')<{
   /** Item instance ID */
   itemId: string;
   note?: string;
+  craftedDate?: number;
 }>();
 
 /**
@@ -143,7 +157,7 @@ export const setItemHashNote = createAction('tag_notes/SET_HASH_NOTE')<{
 /**
  * Set the tag for an item regardless of whether it's instanced or not. Prefer this to setItemTag / setItemHashTag.
  */
-export function setTag(item: DimItem, tag: TagValue | undefined): ThunkResult {
+export function setTag(item: DimItem, tag: TagCommand | undefined): ThunkResult {
   return async (dispatch) => {
     if (!item.taggable) {
       return;
@@ -157,11 +171,12 @@ export function setTag(item: DimItem, tag: TagValue | undefined): ThunkResult {
         ? setItemTag({
             itemId: item.id,
             tag: tag === 'clear' ? undefined : tag,
+            craftedDate: item.craftedInfo?.craftedDate,
           })
         : setItemHashTag({
             itemHash: item.hash,
             tag: tag === 'clear' ? undefined : tag,
-          })
+          }),
     );
   };
 }
@@ -183,12 +198,41 @@ export function setNote(item: DimItem, note: string | undefined): ThunkResult {
         ? setItemNote({
             itemId: item.id,
             note,
+            craftedDate: item.craftedInfo?.craftedDate,
           })
         : setItemHashNote({
             itemHash: item.hash,
             note,
-          })
+          }),
     );
+  };
+}
+
+/**
+ * Append a note to the end of the existing notes for an item.
+ */
+export function appendNote(item: DimItem, note: string | undefined): ThunkResult {
+  return async (dispatch, getState) => {
+    if (!item.taggable || !note) {
+      return;
+    }
+
+    const existingNote = notesSelector(item)(getState());
+    dispatch(setNote(item, appendedToNote(existingNote, note)));
+  };
+}
+
+/**
+ * Remove the provided text from an item's note. Most useful for deleting tags.
+ */
+export function removeFromNote(item: DimItem, note: string | undefined): ThunkResult {
+  return async (dispatch, getState) => {
+    if (!item.taggable || !note) {
+      return;
+    }
+
+    const existingNote = notesSelector(item)(getState());
+    dispatch(setNote(item, removedFromNote(existingNote, note)));
   };
 }
 
@@ -201,6 +245,14 @@ function warnNoSync(): ThunkResult {
       !apiPermissionGrantedSelector(getState()) &&
       localStorage.getItem('warned-no-sync') !== 'true'
     ) {
+      if ('storage' in navigator && 'persist' in navigator.storage) {
+        const isPersisted = await navigator.storage.persist();
+        if (isPersisted) {
+          infoLog('storage', 'Persisted storage granted');
+        } else {
+          warnLog('storage', 'Persisted storage not granted');
+        }
+      }
       localStorage.setItem('warned-no-sync', 'true');
       showNotification({
         type: 'warning',
@@ -216,4 +268,5 @@ function warnNoSync(): ThunkResult {
 export const tagCleanup = createAction('tag_notes/CLEANUP')<string[]>();
 
 /** input a mock profile API response */
-export const setMockProfileResponse = createAction('inventory/MOCK_PROFILE')<string>();
+export const setMockProfileResponse =
+  createAction('inventory/MOCK_PROFILE')<DestinyProfileResponse>();

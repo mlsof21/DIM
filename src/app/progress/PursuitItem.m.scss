@@ -4,10 +4,13 @@
   position: relative;
   width: var(--item-size);
   height: var(--item-size);
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
   box-sizing: border-box;
   cursor: pointer;
 
+  :global(.pathfinder) &,
   :global(#milestones) &,
   :global(#seasonal-challenges) & {
     height: calc(var(--item-size) * 10 / 9 + 4px);
@@ -37,6 +40,11 @@
 
   &:focus {
     outline: none;
+  }
+
+  :global(.pathfinder) & {
+    border-radius: 50%;
+    padding: 4px;
   }
 
   :global(#milestones) &,

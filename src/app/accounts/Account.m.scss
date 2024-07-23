@@ -1,35 +1,13 @@
 @use '../variables.scss' as *;
 
 .account {
-  display: block;
   cursor: pointer;
   line-height: 15px;
   text-align: left;
   position: relative;
-  padding: 6px 2rem 4px 1rem;
-
-  &:focus,
-  &:active {
-    outline: none;
-  }
-  &:hover,
-  &:focus {
-    background-color: #3f3f3f;
-  }
-}
-
-.selectedAccount {
-  border-left: 4px solid $orange;
-  padding-left: calc(1rem - 4px);
-  padding-right: 24px;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-.accountDetails {
-  font-size: 12px !important;
-  color: #aaa;
-  margin: 1px 0 0 0 !important;
+  font-size: 16px;
+  margin: 1px 0 0 0;
+  white-space: nowrap;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -37,19 +15,19 @@
   font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
 
   :global(.app-icon) {
-    font-size: 14px !important;
-    margin: 0 0 0 2px;
+    margin: 0 0 0 4px;
     &.first {
       border-left: 1px solid #666;
-      padding-left: 4px;
-      margin-left: 6px;
-    }
-    &:hover {
-      color: #aaa !important;
+      padding-left: 0.25em;
+      margin-left: 0.375em;
     }
   }
 }
 
-.accountName span {
-  margin: 0 !important;
+.selectedAccount {
+  border-left: 4px solid var(--theme-accent-primary);
+  padding-left: calc(1rem - 4px) !important;
+  padding-right: 24px;
+  height: 100%;
+  box-sizing: border-box;
 }

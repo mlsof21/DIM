@@ -1,6 +1,8 @@
 import MenuAccounts from 'app/accounts/MenuAccounts';
 import { currentAccountSelector } from 'app/accounts/selectors';
+import { PressTipRoot } from 'app/dim-ui/PressTip';
 import Sheet from 'app/dim-ui/Sheet';
+import { showCheatSheet$ } from 'app/hotkeys/HotkeysCheatSheet';
 import { Hotkey } from 'app/hotkeys/hotkeys';
 import { useHotkeys } from 'app/hotkeys/useHotkey';
 import { t } from 'app/i18next-t';
@@ -8,31 +10,33 @@ import { accountRoute } from 'app/routes';
 import { SearchFilterRef } from 'app/search/SearchBar';
 import DimApiWarningBanner from 'app/storage/DimApiWarningBanner';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
+import { streamDeckEnabledSelector } from 'app/stream-deck/selectors';
+import { isiOSBrowser } from 'app/utils/browsers';
 import { useSetCSSVarToHeight } from 'app/utils/hooks';
 import { infoLog } from 'app/utils/log';
-import { Portal } from 'app/utils/temp-container';
 import clsx from 'clsx';
+import { AnimatePresence, Spring, Variants, motion } from 'framer-motion';
 import logo from 'images/logo-type-right-light.svg';
 import _ from 'lodash';
-import Mousetrap from 'mousetrap';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { useLocation } from 'react-router';
 import { Link, NavLink } from 'react-router-dom';
-import { CSSTransition, TransitionGroup } from 'react-transition-group';
 import { useSubscription } from 'use-subscription';
 import ClickOutside from '../dim-ui/ClickOutside';
 import ExternalLink from '../dim-ui/ExternalLink';
-import { default as SearchFilter } from '../search/SearchFilter';
+import SearchFilter from '../search/SearchFilter';
 import WhatsNewLink from '../whats-new/WhatsNewLink';
-import { setSearchQuery } from './actions';
-import { installPrompt$ } from './app-install';
 import AppInstallBanner from './AppInstallBanner';
 import styles from './Header.m.scss';
-import { AppIcon, faExternalLinkAlt, menuIcon, searchIcon, settingsIcon } from './icons';
+import HeaderWarningBanner from './HeaderWarningBanner';
 import MenuBadge from './MenuBadge';
 import PostmasterWarningBanner from './PostmasterWarningBanner';
 import RefreshButton from './RefreshButton';
+import { setSearchQuery } from './actions';
+import { installPrompt$ } from './app-install';
+import { AppIcon, faExternalLinkAlt, menuIcon, searchIcon, settingsIcon } from './icons';
+import { userGuideLink } from './links';
 import { useIsPhonePortrait } from './selectors';
 
 const bugReport = 'https://github.com/DestinyItemManager/DIM/issues';
@@ -40,15 +44,23 @@ const bugReport = 'https://github.com/DestinyItemManager/DIM/issues';
 const logoStyles = {
   beta: styles.beta,
   dev: styles.dev,
+  pr: styles.pr,
   release: undefined,
+  test: undefined,
 } as const;
 
-const transitionClasses = {
-  enter: styles.dropdownEnter,
-  enterActive: styles.dropdownEnterActive,
-  exit: styles.dropdownExit,
-  exitActive: styles.dropdownExitActive,
-} as const;
+const menuAnimateVariants: Variants = {
+  open: { x: 0 },
+  collapsed: { x: -250 },
+};
+const menuAnimateTransition: Spring = { type: 'spring', duration: 0.3, bounce: 0 };
+
+const StreamDeckButton = lazy(
+  () =>
+    import(
+      /* webpackChunkName: "stream-deck-button" */ 'app/stream-deck/StreamDeckButton/StreamDeckButton'
+    ),
+);
 
 // TODO: finally time to hack apart the header styles!
 
@@ -59,7 +71,7 @@ export default function Header() {
 
   // Hamburger menu
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const dropdownToggler = useRef<HTMLAnchorElement>(null);
+  const dropdownToggler = useRef<HTMLButtonElement>(null);
   const toggleDropdown = useCallback((e: React.MouseEvent | KeyboardEvent) => {
     e.preventDefault();
     setDropdownOpen((dropdownOpen) => !dropdownOpen);
@@ -107,8 +119,7 @@ export default function Header() {
   const isStandalone =
     window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
-  const iosPwaAvailable =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream && !isStandalone;
+  const iosPwaAvailable = isiOSBrowser() && !isStandalone;
 
   const installable = installPromptEvent || iosPwaAvailable;
 
@@ -223,50 +234,52 @@ export default function Header() {
 
   // Links about the current Destiny version
   const destinyLinks = linkNodes;
-  const reverseDestinyLinks = <>{linkNodes.slice().reverse()}</>;
 
-  const hotkeys: Hotkey[] = [
-    {
-      combo: 'm',
-      description: t('Hotkey.Menu'),
-      callback: toggleDropdown,
-    },
-    {
-      combo: 'f',
-      description: t('Hotkey.StartSearch'),
-      callback: (event) => {
-        if (searchFilter.current) {
-          searchFilter.current.focusFilterInput();
-          if (isPhonePortrait) {
-            setShowSearch(true);
-          }
-        }
-        event.preventDefault();
-        event.stopPropagation();
+  const hotkeys = useMemo(() => {
+    const hotkeys: Hotkey[] = [
+      {
+        combo: 'm',
+        description: t('Hotkey.Menu'),
+        callback: toggleDropdown,
       },
-    },
-    {
-      combo: 'shift+f',
-      description: t('Hotkey.StartSearchClear'),
-      callback: (event) => {
-        if (searchFilter.current) {
-          searchFilter.current.clearFilter();
-          searchFilter.current.focusFilterInput();
-          if (isPhonePortrait) {
-            setShowSearch(true);
+      {
+        combo: 'f',
+        description: t('Hotkey.StartSearch'),
+        callback: (event) => {
+          if (searchFilter.current) {
+            searchFilter.current.focusFilterInput();
+            if (isPhonePortrait) {
+              setShowSearch(true);
+            }
           }
-        }
-        event.preventDefault();
-        event.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
+        },
       },
-    },
-  ];
+      {
+        combo: 'shift+f',
+        description: t('Hotkey.StartSearchClear'),
+        callback: (event) => {
+          if (searchFilter.current) {
+            searchFilter.current.clearFilter();
+            searchFilter.current.focusFilterInput();
+            if (isPhonePortrait) {
+              setShowSearch(true);
+            }
+          }
+          event.preventDefault();
+          event.stopPropagation();
+        },
+      },
+    ];
+    return hotkeys;
+  }, [isPhonePortrait, toggleDropdown]);
   useHotkeys(hotkeys);
 
   const showKeyboardHelp = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    Mousetrap.trigger('?');
+    showCheatSheet$.next(true);
     setDropdownOpen(false);
   };
 
@@ -274,110 +287,160 @@ export default function Header() {
   const headerRef = useRef<HTMLDivElement>(null);
   useSetCSSVarToHeight(headerRef, '--header-height');
 
+  const headerLinksRef = useRef<HTMLDivElement>(null);
+  const clarityDetected = useClarityDetector(headerLinksRef);
+
+  const streamDeckEnabled = $featureFlags.elgatoStreamDeck
+    ? // eslint-disable-next-line react-hooks/rules-of-hooks
+      useSelector(streamDeckEnabledSelector)
+    : false;
+
   return (
-    <header className={styles.container} ref={headerRef}>
-      <div className={styles.header}>
-        <a
-          className={clsx(styles.menuItem, styles.menu)}
-          ref={dropdownToggler}
-          onClick={toggleDropdown}
-          role="button"
-          aria-haspopup="menu"
-          aria-label={t('Header.Menu')}
-          aria-expanded={dropdownOpen}
-        >
-          <AppIcon icon={menuIcon} />
-          <MenuBadge />
-        </a>
-        <TransitionGroup component={null}>
-          {dropdownOpen && (
-            <CSSTransition
-              nodeRef={dropdownRef}
-              classNames={transitionClasses}
-              timeout={{ enter: 500, exit: 500 }}
-            >
-              <ClickOutside
-                ref={dropdownRef}
-                extraRef={dropdownToggler}
+    <PressTipRoot.Provider value={headerRef}>
+      <header className={styles.container} ref={headerRef}>
+        <div className={styles.header}>
+          <button
+            type="button"
+            className={clsx(styles.menuItem, styles.menu)}
+            ref={dropdownToggler}
+            onClick={toggleDropdown}
+            aria-haspopup="menu"
+            aria-label={t('Header.Menu')}
+            aria-expanded={dropdownOpen}
+          >
+            <AppIcon icon={menuIcon} />
+            <MenuBadge />
+          </button>
+          <AnimatePresence>
+            {dropdownOpen && (
+              <motion.div
                 key="dropdown"
                 className={styles.dropdown}
-                onClickOutside={hideDropdown}
                 role="menu"
+                initial="collapsed"
+                animate="open"
+                exit="collapsed"
+                variants={menuAnimateVariants}
+                transition={menuAnimateTransition}
               >
-                {destinyLinks}
-                <hr />
-                <NavLink className={navLinkClassName} to="/settings">
-                  {t('Settings.Settings')}
-                </NavLink>
-                {!isPhonePortrait && (
-                  <a className={styles.menuItem} onClick={showKeyboardHelp}>
-                    {t('Header.KeyboardShortcuts')}
-                  </a>
-                )}
-                <ExternalLink
-                  className={styles.menuItem}
-                  href="https://github.com/DestinyItemManager/DIM/wiki"
+                <ClickOutside
+                  ref={dropdownRef}
+                  extraRef={dropdownToggler}
+                  onClickOutside={hideDropdown}
                 >
-                  {t('General.UserGuideLink')}
-                </ExternalLink>
-                {installable ? (
-                  <a className={styles.menuItem} onClick={installDim}>
-                    {t('Header.InstallDIM')}
-                  </a>
-                ) : offerRelaunch ? (
-                  <a className={styles.menuItem} onClick={reLaunchDim}>
-                    {t('Header.LaunchDIMAlone')}{' '}
-                    <AppIcon icon={faExternalLinkAlt} className={styles.launchSeparateIcon} />
-                  </a>
-                ) : null}
-                {dimLinks}
-                <MenuAccounts closeDropdown={hideDropdown} />
-              </ClickOutside>
-            </CSSTransition>
-          )}
-        </TransitionGroup>
-        <Link to="/" className={clsx(styles.menuItem, styles.logoLink)}>
-          <img
-            className={clsx(styles.logo, logoStyles[$DIM_FLAVOR])}
-            title={`v${$DIM_VERSION} (${$DIM_FLAVOR})`}
-            src={logo}
-            alt="DIM"
-            aria-label="dim"
-          />
-        </Link>
-        <div className={styles.headerLinks}>{reverseDestinyLinks}</div>
-        <div className={styles.headerRight}>
-          {account && !isPhonePortrait && (
-            <span className="search-link">
-              <SearchFilter onClear={hideSearch} ref={searchFilter} />
-            </span>
-          )}
-          <RefreshButton className={clsx(styles.menuItem)} />
-          {!isPhonePortrait && (
-            <Link className={styles.menuItem} to="/settings" title={t('Settings.Settings')}>
-              <AppIcon icon={settingsIcon} />
-            </Link>
-          )}
-          <span className={clsx(styles.menuItem, 'search-button')} onClick={toggleSearch}>
-            <AppIcon icon={searchIcon} />
-          </span>
+                  {destinyLinks}
+                  <hr />
+                  <NavLink className={navLinkClassName} to="/settings">
+                    {t('Settings.Settings')}
+                  </NavLink>
+                  {!isPhonePortrait && (
+                    <a className={styles.menuItem} onClick={showKeyboardHelp}>
+                      {t('Header.KeyboardShortcuts')}
+                    </a>
+                  )}
+                  <ExternalLink className={styles.menuItem} href={userGuideLink}>
+                    {t('General.UserGuideLink')}
+                  </ExternalLink>
+                  {installable ? (
+                    <a className={styles.menuItem} onClick={installDim}>
+                      {t('Header.InstallDIM')}
+                    </a>
+                  ) : offerRelaunch ? (
+                    <a className={styles.menuItem} onClick={reLaunchDim}>
+                      {t('Header.LaunchDIMAlone')}{' '}
+                      <AppIcon icon={faExternalLinkAlt} className={styles.launchSeparateIcon} />
+                    </a>
+                  ) : null}
+                  {dimLinks}
+                  <hr />
+                  <MenuAccounts closeDropdown={hideDropdown} />
+                </ClickOutside>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <Link to="/" className={clsx(styles.menuItem, styles.logoLink)}>
+            <img
+              className={clsx(styles.logo, logoStyles[$DIM_FLAVOR])}
+              title={`v${$DIM_VERSION} (${$DIM_FLAVOR})`}
+              src={logo}
+              alt="DIM"
+              aria-label="dim"
+            />
+          </Link>
+          <div className={styles.headerLinks} ref={headerLinksRef}>
+            {destinyLinks}
+          </div>
+          <div className={styles.headerRight}>
+            {account && !isPhonePortrait && (
+              <span className={styles.searchLink}>
+                <SearchFilter onClear={hideSearch} ref={searchFilter} />
+              </span>
+            )}
+            {streamDeckEnabled && (
+              <Suspense>
+                <StreamDeckButton />
+              </Suspense>
+            )}
+            <RefreshButton className={styles.menuItem} />
+            {!isPhonePortrait && (
+              <Link className={styles.menuItem} to="/settings" title={t('Settings.Settings')}>
+                <AppIcon icon={settingsIcon} />
+              </Link>
+            )}
+            <button
+              type="button"
+              className={clsx(styles.menuItem, styles.searchButton)}
+              onClick={toggleSearch}
+            >
+              <AppIcon icon={searchIcon} />
+            </button>
+          </div>
         </div>
-      </div>
-      {account && isPhonePortrait && showSearch && (
-        <span className="mobile-search-link">
-          <SearchFilter onClear={hideSearch} ref={searchFilter} />
-        </span>
-      )}
-      {isPhonePortrait && installable && <AppInstallBanner onClick={installDim} />}
-      <PostmasterWarningBanner />
-      {$featureFlags.warnNoSync && <DimApiWarningBanner />}
-      {promptIosPwa && (
-        <Portal>
+        {account && isPhonePortrait && showSearch && (
+          <span className="mobile-search-link">
+            <SearchFilter onClear={hideSearch} ref={searchFilter} />
+          </span>
+        )}
+        {isPhonePortrait && installable && <AppInstallBanner onClick={installDim} />}
+        <PostmasterWarningBanner />
+        {$featureFlags.warnNoSync && <DimApiWarningBanner />}
+        {clarityDetected && (
+          <HeaderWarningBanner>
+            <span>{t('Header.Clarity')}</span>
+          </HeaderWarningBanner>
+        )}
+        {promptIosPwa && (
           <Sheet header={<h1>{t('Header.InstallDIM')}</h1>} onClose={() => setPromptIosPwa(false)}>
             <p className={styles.pwaPrompt}>{t('Header.IosPwaPrompt')}</p>
           </Sheet>
-        </Portal>
-      )}
-    </header>
+        )}
+      </header>
+    </PressTipRoot.Provider>
   );
+}
+
+/**
+ * The Clarity extension is discontinued and causes memory/CPU issues in DIM.
+ * This detects the extension by watching for the menu item it inserts, and
+ * returns whether Clarity is installed.
+ */
+function useClarityDetector(ref: React.RefObject<HTMLElement>) {
+  const [clarityDetected, setClarityDetected] = useState(false);
+  useEffect(() => {
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (
+          mutation.type === 'childList' &&
+          Array.from(mutation.addedNodes ?? []).some(
+            (n) => n instanceof HTMLElement && n.classList.contains('Clarity_menu_button'),
+          )
+        ) {
+          setClarityDetected(true);
+        }
+      }
+    });
+    observer.observe(ref.current!, { subtree: true, childList: true });
+    return () => observer.disconnect();
+  }, [ref]);
+  return clarityDetected;
 }

@@ -1,42 +1,42 @@
+import { compareBy } from 'app/utils/comparators';
+import { BungieMembershipType } from 'bungie-api-ts/destiny2';
 import clsx from 'clsx';
-import React from 'react';
 import { AppIcon } from '../shell/icons';
 import styles from './Account.m.scss';
-import { DestinyAccount, PLATFORM_ICONS } from './destiny-account';
+import { DestinyAccount, PLATFORM_ICONS, PLATFORM_LABELS } from './destiny-account';
 
-function Account(
-  {
-    account,
-    selected,
-    className,
-    ...other
-  }: {
-    account: DestinyAccount;
-    selected?: boolean;
-    className?: string;
-  } & React.HTMLAttributes<HTMLDivElement>,
-  ref?: React.Ref<HTMLDivElement>
-) {
+/**
+ * Accounts that appear in the hamburger menu.
+ */
+export default function Account({
+  account,
+  selected,
+  className,
+}: {
+  account: DestinyAccount;
+  selected?: boolean;
+  className?: string;
+}) {
   return (
     <div
-      ref={ref}
       className={clsx(styles.account, className, { [styles.selectedAccount]: selected })}
-      {...other}
       role="menuitem"
     >
-      <div className={styles.accountName}>{account.displayName}</div>
-      <div className={styles.accountDetails}>
-        <b>{account.destinyVersion === 1 ? 'D1' : 'D2'}</b>
-        {account.platforms.map((platformType, index) => (
-          <AppIcon
-            key={platformType}
-            className={clsx({ [styles.first]: index === 0 })}
-            icon={PLATFORM_ICONS[platformType]}
-          />
-        ))}
-      </div>
+      Destiny {account.destinyVersion}
+      {account.platforms
+        .filter((p) => account.platforms.length === 1 || p !== BungieMembershipType.TigerStadia)
+        .sort(compareBy((p) => account.originalPlatformType !== p))
+        .map((platformType, index) =>
+          platformType in PLATFORM_ICONS ? (
+            <AppIcon
+              key={platformType}
+              className={clsx({ [styles.first]: index === 0 })}
+              icon={PLATFORM_ICONS[platformType]!}
+            />
+          ) : (
+            PLATFORM_LABELS[platformType]
+          ),
+        )}
     </div>
   );
 }
-
-export default React.forwardRef(Account);

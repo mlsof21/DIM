@@ -1,90 +1,65 @@
 import { languageSelector } from 'app/dim-api/selectors';
 import ExternalLink from 'app/dim-ui/ExternalLink';
+import { t } from 'app/i18next-t';
 import { DimItem } from 'app/inventory/item-types';
-import { LoreLink } from 'app/item-popup/ItemDescription';
 import { useIsPhonePortrait } from 'app/shell/selectors';
+import { isKillTrackerSocket } from 'app/utils/item-utils';
 import { getSocketsWithStyle, isWeaponMasterworkSocket } from 'app/utils/socket-utils';
 import { DestinySocketCategoryStyle } from 'bungie-api-ts/destiny2';
-import { ItemCategoryHashes } from 'data/d2/generated-enums';
+import { ItemCategoryHashes, PlugCategoryHashes } from 'data/d2/generated-enums';
 import destinysets from 'images/destinysets.svg';
-import destinytracker from 'images/destinytracker.png';
 import logo from 'images/dimlogo.svg';
-import gunsmith from 'images/gunsmith.png';
+import foundry from 'images/foundry.png';
+import ishtarLogo from 'images/ishtar-collective.svg';
 import lightgg from 'images/lightgg.png';
 import _ from 'lodash';
-import React from 'react';
 import { useSelector } from 'react-redux';
 import styles from './Links.m.scss';
-
-// TODO: permalink for sharing
-const links = [
-  {
-    name: 'DIM',
-    icon: logo,
-    link: (item: DimItem) => `/armory/${item.hash}?perks=${buildSocketParam(item)}`,
-  },
-  {
-    name: 'Light.gg',
-    icon: lightgg,
-    link: (item: DimItem, language: string) =>
-      `https://www.light.gg/db/${language}/items/${item.hash}`,
-  },
-  { name: 'DestinyTracker', icon: destinytracker, link: destinyDBLink },
-  {
-    name: 'Gunsmith',
-    icon: gunsmith,
-    link: (item: DimItem) =>
-      `https://d2gunsmith.com/w/${item.hash}?s=${buildGunsmithSockets(item)}`,
-  },
-  {
-    name: 'data.destinysets.com',
-    icon: destinysets,
-    link: (item: DimItem, language: string) =>
-      `https://data.destinysets.com/i/InventoryItem:${item.hash}?lang=${language}`,
-    hideOnPhone: true,
-  },
-];
 
 export default function Links({ item }: { item: DimItem }) {
   const language = useSelector(languageSelector);
   const isPhonePortrait = useIsPhonePortrait();
+
+  const links = [
+    {
+      name: 'DIM',
+      icon: logo,
+      link: `/armory/${item.hash}?perks=${buildSocketParam(item)}`,
+    },
+    {
+      name: 'Light.gg',
+      icon: lightgg,
+      link: `https://www.light.gg/db/${language}/items/${item.hash}${buildLightGGSockets(item)}`,
+    },
+    item.bucket.inWeapons && {
+      name: 'D2Foundry',
+      icon: foundry,
+      link: `https://d2foundry.gg/w/${item.hash}${buildFoundrySockets(item)}`,
+    },
+    !isPhonePortrait && {
+      name: 'data.destinysets.com',
+      icon: destinysets,
+      link: `https://data.destinysets.com/i/InventoryItem:${item.hash}?lang=${language}`,
+    },
+    item.loreHash && {
+      name: t('MovePopup.ReadLoreLink'),
+      icon: ishtarLogo,
+      link: `http://www.ishtar-collective.net/entries/${item.loreHash}`,
+    },
+  ];
+
   return (
     <ul className={styles.links}>
-      {links
-        .filter((l) => l.name !== 'Gunsmith' || item.bucket.inWeapons)
-        .map(
-          ({ link, name, icon, hideOnPhone }) =>
-            !(isPhonePortrait && hideOnPhone) && (
-              <li key={name}>
-                <ExternalLink href={link(item, language)}>
-                  <img src={icon} height={16} width={16} />
-                  {name}
-                </ExternalLink>
-              </li>
-            )
-        )}
-      {item.loreHash && (
-        <li>
-          <LoreLink loreHash={item.loreHash} />
+      {_.compact(links).map(({ link, name, icon }) => (
+        <li key={name}>
+          <ExternalLink href={link}>
+            <img src={icon} height={16} width={16} />
+            {name}
+          </ExternalLink>
         </li>
-      )}
+      ))}
     </ul>
   );
-}
-
-function destinyDBLink(item: DimItem) {
-  const DimItem = item;
-  let perkQueryString = '';
-
-  if (DimItem) {
-    const perkCsv = buildSocketParam(DimItem);
-    // to-do: if buildPerksCsv typing is correct, and can only return a string, lines 142-150 could be a single line
-    if (perkCsv?.length) {
-      perkQueryString = `?perks=${perkCsv}`;
-    }
-  }
-
-  return `https://destinytracker.com/destiny-2/db/items/${item.hash}${perkQueryString}`;
 }
 
 /**
@@ -108,29 +83,74 @@ function buildSocketParam(item: DimItem): string {
 }
 
 /**
- * D2Gunsmith's socket format is: [...<first four perks, padded out if necessary, masterwork, weapon mod].join(',')
+ * Light.gg's socket format is highly similar to that of D2Gunsmith: [...base perks, masterwork, weapon mod].join(',')
  */
-function buildGunsmithSockets(item: DimItem) {
-  if (item.sockets) {
-    const perkValues: number[] = [0, 0, 0, 0];
-    const perks = getSocketsWithStyle(item.sockets, DestinySocketCategoryStyle.Reusable);
-    perks.unshift(); // remove the archetype perk
-    let i = 0;
-    // Only pick 4 perks and purposefully ignore the origin perk
-    // on some guns as the link format doesn't support them.
-    for (const perk of _.take(perks, 4)) {
-      perkValues[i] = perk.plugged?.plugDef.hash ?? 0;
-      i++;
-    }
-    const masterwork = item.sockets.allSockets.find(isWeaponMasterworkSocket);
-    perkValues[4] = masterwork?.plugged?.plugDef.hash ?? 0;
-    const weaponMod = item.sockets.allSockets.find((s) =>
-      s.plugged?.plugDef.itemCategoryHashes?.includes(ItemCategoryHashes.WeaponModsDamage)
-    );
-    perkValues[5] = weaponMod?.plugged!.plugDef.hash ?? 0;
+function buildLightGGSockets(item: DimItem) {
+  const perkValues = getWeaponSocketInfo(item);
 
-    return perkValues.join(',');
+  if (perkValues) {
+    return `?p=${[...perkValues.largePerks, ...perkValues.traits, perkValues.masterwork, perkValues.weaponMod].map((s) => s || '').join(',')}`;
   }
 
   return '';
+}
+
+/**
+ * Foundry's socket format is: ?p=perkHashes,...&m=weaponMod&mw=masterworkStatHash
+ */
+function buildFoundrySockets(item: DimItem) {
+  const perkValues = getWeaponSocketInfo(item);
+
+  if (perkValues) {
+    const primaryMasterworkStat =
+      item.sockets?.allSockets.find(isWeaponMasterworkSocket)?.plugged?.plugDef
+        .investmentStats?.[0];
+    const mwHash = primaryMasterworkStat?.statTypeHash || perkValues.largePerks[0] || 0; // `mw` for crafted exo intrinsic
+    const modHash = perkValues.weaponMod || perkValues.masterwork || 0; // `m` for non-crafted exo mw
+    return `?p=${perkValues.traits.join(',')}&m=${modHash || ''}&mw=${mwHash || ''}`;
+  }
+
+  return '';
+}
+
+/**
+ * Gathers general socket information for link generation in D2Gunsmith and Light.gg.
+ */
+function getWeaponSocketInfo(item: DimItem): null | {
+  traits: number[];
+  masterwork: number;
+  weaponMod: number;
+  largePerks: number[];
+} {
+  if (item.sockets && item.bucket?.inWeapons) {
+    // TODO: Map enhanced intrinsic frames with their corresponding stat masterworks
+    const masterworkSocket = item.sockets.allSockets.find(
+      (s) => isWeaponMasterworkSocket(s) && !s.isReusable,
+    );
+    const masterwork =
+      masterworkSocket?.plugged?.plugDef.plug.plugCategoryHash ===
+      PlugCategoryHashes.CraftingPlugsFrameIdentifiers
+        ? 0
+        : masterworkSocket?.plugged?.plugDef.hash ?? 0;
+
+    const weaponModSocket = item.sockets.allSockets.find((s) =>
+      s.plugged?.plugDef.itemCategoryHashes?.includes(ItemCategoryHashes.WeaponModsDamage),
+    );
+    const weaponMod = weaponModSocket?.plugged!.plugDef.hash ?? 0;
+
+    const trackerSocket = item.sockets.allSockets.find(isKillTrackerSocket);
+    const largePerks = getSocketsWithStyle(item.sockets, DestinySocketCategoryStyle.LargePerk)
+      .filter((s) => s.hasRandomizedPlugItems)
+      .map((s) => s.plugged?.plugDef.hash ?? 0);
+    const perkSockets = getSocketsWithStyle(item.sockets, DestinySocketCategoryStyle.Reusable);
+    const traits = perkSockets
+      .filter(
+        (s) => ![trackerSocket?.socketIndex, weaponModSocket?.socketIndex].includes(s.socketIndex),
+      )
+      .map((s) => s.plugged?.plugDef.hash ?? 0);
+
+    return { traits, masterwork, weaponMod, largePerks };
+  }
+
+  return null;
 }

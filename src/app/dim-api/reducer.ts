@@ -1,5 +1,5 @@
 import {
-  defaultGlobalSettings,
+  CustomStatWeights,
   DestinyVersion,
   GlobalSettings,
   ItemAnnotation,
@@ -7,27 +7,34 @@ import {
   Loadout,
   ProfileUpdateResult,
   Search,
+  SearchType,
   TagValue,
+  defaultGlobalSettings,
 } from '@destinyitemmanager/dim-api-types';
 import { DestinyAccount } from 'app/accounts/destiny-account';
-import { convertDimLoadoutToApiLoadout } from 'app/loadout-drawer/loadout-type-converters';
+import { t } from 'app/i18next-t';
+import { convertDimLoadoutToApiLoadout } from 'app/loadout/loadout-type-converters';
+import { showNotification } from 'app/notifications/notifications';
 import { recentSearchComparator } from 'app/search/autocomplete';
-import { searchConfigSelector } from 'app/search/search-config';
-import { parseAndValidateQuery } from 'app/search/search-utils';
-import { RootState } from 'app/store/types';
+import { CUSTOM_TOTAL_STAT_HASH } from 'app/search/d2-known-values';
+import { FilterContext } from 'app/search/items/item-filter-types';
+import { buildItemFiltersMap } from 'app/search/items/item-search-filter';
+import { parseAndValidateQuery } from 'app/search/search-filter';
+import { count, uniqBy } from 'app/utils/collections';
 import { emptyArray } from 'app/utils/empty';
-import { errorLog, infoLog, timer } from 'app/utils/log';
-import { count } from 'app/utils/util';
+import { errorLog, infoLog } from 'app/utils/log';
+import { reportException } from 'app/utils/sentry';
 import { clearWishLists } from 'app/wishlists/actions';
+import { DestinyClass } from 'bungie-api-ts/destiny2';
 import { deepEqual } from 'fast-equals';
-import produce, { Draft } from 'immer';
+import { Draft, produce } from 'immer';
 import _ from 'lodash';
 import { ActionType, getType } from 'typesafe-actions';
 import * as inventoryActions from '../inventory/actions';
-import * as loadoutActions from '../loadout-drawer/actions';
-import { Loadout as DimLoadout } from '../loadout-drawer/loadout-types';
+import * as loadoutActions from '../loadout/actions';
+import { Loadout as DimLoadout } from '../loadout/loadout-types';
 import * as settingsActions from '../settings/actions';
-import { initialSettingsState, Settings } from '../settings/initial-settings';
+import { Settings, initialSettingsState } from '../settings/initial-settings';
 import { DeleteLoadoutUpdateWithRollback, ProfileUpdateWithRollback } from './api-types';
 import * as actions from './basic-actions';
 import { makeProfileKey, makeProfileKeyFromAccount } from './selectors';
@@ -45,7 +52,7 @@ export interface DimApiState {
   profileLoadedFromIndexedDb: boolean;
   profileLoaded: boolean;
   profileLoadedError?: Error;
-  // unix timestamp for when the profile was last loaded
+  // unix timestamp for when any profile was last loaded
   profileLastLoaded: number;
 
   /**
@@ -65,6 +72,9 @@ export interface DimApiState {
    */
   profiles: {
     [accountKey: string]: {
+      // unix timestamp for when this specific profile was last loaded
+      profileLastLoaded: number;
+
       /** Loadouts stored by loadout ID */
       loadouts: {
         [id: string]: Loadout;
@@ -154,7 +164,7 @@ export const dimApi = (
   state: DimApiState = initialState,
   action: DimApiAction,
   // This is a specially-handled reducer (see reducers.ts) which gets the current account (based on incoming state) passed along
-  account?: DestinyAccount
+  account?: DestinyAccount,
 ): DimApiState => {
   switch (action.type) {
     case getType(actions.globalSettingsLoaded):
@@ -169,17 +179,35 @@ export const dimApi = (
 
     case getType(actions.profileLoadedFromIDB): {
       // When loading from IDB, merge with current state
+      if (state.updateQueue) {
+        // Undo all the changes, starting with the most recent
+        state = state.updateQueue
+          .toReversed()
+          .reduce(
+            (state, update) => produce(state, (draft) => reverseUpdateLocally(draft, update)),
+            state,
+          );
+      }
+
       const newUpdateQueue = action.payload
-        ? [...action.payload.updateQueue, ...state.updateQueue]
+        ? // TODO: undo existing updates, add loaded updates, reapply them all
+          [...(action.payload.updateQueue ?? []), ...state.updateQueue]
         : [];
+
+      // Now apply all those updates, starting with the oldest
+      state = newUpdateQueue.reduce(
+        (state, update) => produce(state, (draft) => applyUpdateLocally(draft, update)),
+        state,
+      );
+
       return action.payload
-        ? {
+        ? migrateSettings({
             ...state,
             profileLoadedFromIndexedDb: true,
-            settings: migrateSettings({
+            settings: {
               ...state.settings,
               ...action.payload.settings,
-            }),
+            },
             profiles: {
               ...state.profiles,
               ...action.payload.profiles,
@@ -190,7 +218,7 @@ export const dimApi = (
               ...state.searches,
               ...action.payload.searches,
             },
-          }
+          })
         : {
             ...state,
             profileLoadedFromIndexedDb: true,
@@ -204,15 +232,15 @@ export const dimApi = (
       const existingProfile = account ? state.profiles[profileKey] : undefined;
 
       // TODO: clean out invalid/simple searches on first load?
-      const newState: DimApiState = {
+      const newState: DimApiState = migrateSettings({
         ...state,
         profileLoaded: true,
         profileLoadedError: undefined,
         profileLastLoaded: Date.now(),
-        settings: migrateSettings({
+        settings: {
           ...state.settings,
-          ...profileResponse.settings,
-        }),
+          ...(profileResponse.settings as Settings),
+        },
         itemHashTags: profileResponse.itemHashTags
           ? _.keyBy(profileResponse.itemHashTags, (t) => t.hash)
           : state.itemHashTags,
@@ -221,6 +249,7 @@ export const dimApi = (
               ...state.profiles,
               // Overwrite just this account's profile. If a specific key is missing from the response, don't overwrite it.
               [profileKey]: {
+                profileLastLoaded: Date.now(),
                 loadouts: profileResponse.loadouts
                   ? _.keyBy(profileResponse.loadouts, (l) => l.id)
                   : existingProfile?.loadouts ?? {},
@@ -240,10 +269,14 @@ export const dimApi = (
                 [account.destinyVersion]: profileResponse.searches || [],
               }
             : state.searches,
-      };
+      });
 
       // If this is the first load, cleanup searches
-      if (account && !state.profileLoaded) {
+      if (
+        account &&
+        profileResponse.searches?.length &&
+        !state.searches[account.destinyVersion].length
+      ) {
         return produce(newState, (state) => cleanupInvalidSearches(state, account));
       }
 
@@ -316,7 +349,7 @@ export const dimApi = (
         state,
         'customCharacterSort',
         // The order includes characters from multiple profiles, so we can't just replace it
-        state.settings.customCharacterSort.filter((id) => !order.includes(id)).concat(order)
+        state.settings.customCharacterSort.filter((id) => !order.includes(id)).concat(order),
       );
     }
 
@@ -334,29 +367,33 @@ export const dimApi = (
 
     // *** Tags/Notes ***
 
-    case getType(inventoryActions.setItemTag):
+    case getType(inventoryActions.setItemTag): {
+      const { itemId, tag, craftedDate } = action.payload;
       return produce(state, (draft) => {
-        setTag(draft, action.payload.itemId, action.payload.tag as TagValue, account!);
+        setTag(draft, itemId, tag, craftedDate, account!);
       });
+    }
 
     case getType(inventoryActions.setItemTagsBulk):
       return produce(state, (draft) => {
         for (const info of action.payload) {
-          setTag(draft, info.itemId, info.tag as TagValue, account!);
+          setTag(draft, info.itemId, info.tag, info.craftedDate, account!);
         }
       });
 
-    case getType(inventoryActions.setItemNote):
+    case getType(inventoryActions.setItemNote): {
+      const { itemId, note, craftedDate } = action.payload;
       return produce(state, (draft) => {
-        setNote(draft, action.payload.itemId, action.payload.note, account!);
+        setNote(draft, itemId, note, craftedDate, account!);
       });
+    }
 
     case getType(inventoryActions.tagCleanup):
       return tagCleanup(state, action.payload, account!);
 
     case getType(inventoryActions.setItemHashTag):
       return produce(state, (draft) => {
-        setItemHashTag(draft, action.payload.itemHash, action.payload.tag as TagValue, account!);
+        setItemHashTag(draft, action.payload.itemHash, action.payload.tag, account!);
       });
 
     case getType(inventoryActions.setItemHashNote):
@@ -368,17 +405,23 @@ export const dimApi = (
 
     case getType(actions.searchUsed):
       return produce(state, (draft) => {
-        searchUsed(draft, account!, action.payload);
+        searchUsed(draft, account!, action.payload.query, action.payload.type);
       });
 
     case getType(actions.saveSearch):
       return produce(state, (draft) => {
-        saveSearch(account!, draft, action.payload.query, action.payload.saved);
+        saveSearch(
+          account!,
+          draft,
+          action.payload.query,
+          action.payload.saved,
+          action.payload.type,
+        );
       });
 
     case getType(actions.searchDeleted):
       return produce(state, (draft) => {
-        deleteSearch(draft, account!.destinyVersion, action.payload);
+        deleteSearch(draft, account!.destinyVersion, action.payload.query, action.payload.type);
       });
 
     // *** Triumphs ***
@@ -393,36 +436,96 @@ export const dimApi = (
   }
 };
 
-function migrateSettings(settings: Settings) {
+/**
+ * Migrates deprecated settings to their new equivalent, and erroneous settings values to their correct value.
+ * This updates the settings state and adds their updates to the update queue
+ */
+function migrateSettings(state: DimApiState) {
   // Fix some integer settings being stored as strings
-  if (typeof settings.charCol === 'string') {
-    settings = { ...settings, charCol: parseInt(settings.charCol, 10) };
+  if (typeof state.settings.charCol === 'string') {
+    state = changeSetting(state, 'charCol', parseInt(state.settings.charCol, 10));
   }
-  if (typeof settings.charColMobile === 'string') {
-    settings = { ...settings, charColMobile: parseInt(settings.charColMobile, 10) };
+  if (typeof state.settings.charColMobile === 'string') {
+    state = changeSetting(state, 'charColMobile', parseInt(state.settings.charColMobile, 10));
   }
-  if (typeof settings.inventoryClearSpaces === 'string') {
-    settings = { ...settings, inventoryClearSpaces: parseInt(settings.inventoryClearSpaces, 10) };
+  if (typeof state.settings.inventoryClearSpaces === 'string') {
+    state = changeSetting(
+      state,
+      'inventoryClearSpaces',
+      parseInt(state.settings.inventoryClearSpaces, 10),
+    );
   }
-  if (typeof settings.itemSize === 'string') {
-    settings = { ...settings, itemSize: parseInt(settings.itemSize, 10) };
+  if (typeof state.settings.itemSize === 'string') {
+    state = changeSetting(state, 'itemSize', parseInt(state.settings.itemSize, 10));
+  }
+
+  // Using undefined for the absence of a watermark was a bad idea
+  if (state.settings.itemFeedWatermark === undefined) {
+    state = changeSetting(state, 'itemFeedWatermark', initialSettingsState.itemFeedWatermark);
   }
 
   // Replace 'element' sort with 'elementWeapon' and 'elementArmor'
-  const sortOrder = settings.itemSortOrderCustom || [];
-  const reversals = settings.itemSortReversals || [];
+  const sortOrder = state.settings.itemSortOrderCustom || [];
+  const reversals = state.settings.itemSortReversals || [];
 
   if (sortOrder.includes('element')) {
-    sortOrder.splice(sortOrder.indexOf('element'), 1, 'elementWeapon', 'elementArmor');
+    state = changeSetting(
+      state,
+      'itemSortOrderCustom',
+      sortOrder.toSpliced(sortOrder.indexOf('element'), 1, 'elementWeapon', 'elementArmor'),
+    );
   }
 
   if (reversals.includes('element')) {
-    reversals.splice(sortOrder.indexOf('element'), 1, 'elementWeapon', 'elementArmor');
+    state = changeSetting(
+      state,
+      'itemSortReversals',
+      reversals.toSpliced(sortOrder.indexOf('element'), 1, 'elementWeapon', 'elementArmor'),
+    );
   }
 
-  settings = { ...settings, itemSortOrderCustom: sortOrder, itemSortReversals: reversals };
+  // converts any old custom stats stored in the old settings key, to the new format
+  const oldCustomStats = state.settings.customTotalStatsByClass;
+  if (!_.isEmpty(oldCustomStats)) {
+    // this existing array should 100% be empty if the user's stats are in old format...
+    // but not taking any chances. we'll preserve what's there.
+    const customStats = [...state.settings.customStats];
 
-  return settings;
+    for (const classEnumString in oldCustomStats) {
+      const classEnum: DestinyClass = parseInt(classEnumString, 10);
+      const statHashList = oldCustomStats[classEnum];
+
+      if (classEnum !== DestinyClass.Unknown && statHashList?.length > 0) {
+        const weights: CustomStatWeights = {};
+        for (const statHash of statHashList) {
+          weights[statHash] = 1;
+        }
+        customStats.push({
+          label: t('Stats.Custom'),
+          shortLabel: 'custom',
+          class: classEnum,
+          weights,
+          // converted old stats get special permission to use stat hashes higher than CUSTOM_TOTAL_STAT_HASH
+          // other are decremented from CUSTOM_TOTAL_STAT_HASH
+          statHash: CUSTOM_TOTAL_STAT_HASH + 1 + classEnum,
+        });
+      }
+    }
+
+    // empty out the old-format setting. eventually phase out this old settings key?
+    state = changeSetting(state, 'customStats', customStats);
+    state = changeSetting(state, 'customTotalStatsByClass', {});
+  }
+
+  // A previous bug ins settings migration could cause duplicate custom stats
+  if (state.settings.customStats.length) {
+    const uniqCustomStats = uniqBy(state.settings.customStats, (stat) => stat.statHash);
+    if (uniqCustomStats.length !== state.settings.customStats.length) {
+      state = changeSetting(state, 'customStats', uniqCustomStats);
+    }
+  }
+
+  return state;
 }
 
 function changeSetting<V extends keyof Settings>(state: DimApiState, prop: V, value: Settings[V]) {
@@ -433,8 +536,8 @@ function changeSetting<V extends keyof Settings>(state: DimApiState, prop: V, va
 
   return produce(state, (draft) => {
     const beforeValue = draft.settings[prop];
-    draft.settings[prop] = value;
-    draft.updateQueue.push({
+
+    const update: ProfileUpdateWithRollback = {
       action: 'setting',
       payload: {
         [prop]: value,
@@ -442,7 +545,9 @@ function changeSetting<V extends keyof Settings>(state: DimApiState, prop: V, va
       before: {
         [prop]: beforeValue,
       },
-    });
+    };
+    applyUpdateLocally(draft, update);
+    draft.updateQueue.push(update);
   });
 }
 
@@ -452,59 +557,54 @@ function changeSetting<V extends keyof Settings>(state: DimApiState, prop: V, va
  * the update watermark.
  */
 function prepareUpdateQueue(state: DimApiState) {
-  const stopTimer = timer('prepareUpdateQueue');
-  try {
-    return produce(state, (draft) => {
-      // If the user only wants to save data locally, then throw away the update queue.
-      if (state.apiPermissionGranted === false) {
-        draft.updateQueue = emptyArray();
-        draft.updateInProgressWatermark = 0;
-        return;
+  return produce(state, (draft) => {
+    // If the user only wants to save data locally, then throw away the update queue.
+    if (state.apiPermissionGranted === false) {
+      draft.updateQueue = emptyArray();
+      draft.updateInProgressWatermark = 0;
+      return;
+    }
+
+    let platformMembershipId: string | undefined;
+    let destinyVersion: DestinyVersion | undefined;
+
+    // Multiple updates to a particular object can be coalesced into a single update
+    // before being sent. We iterate from beginning (oldest update) to end (newest update).
+    const compacted: {
+      [key: string]: ProfileUpdateWithRollback;
+    } = {};
+    const rest: ProfileUpdateWithRollback[] = [];
+    for (const update of draft.updateQueue) {
+      // The first time we see a profile-specific update, keep track of which
+      // profile it was, and reject updates for the other profiles. This is
+      // because DIM API update can only work one profile at a time.
+      if (!platformMembershipId && !destinyVersion) {
+        platformMembershipId = update.platformMembershipId;
+        destinyVersion = update.destinyVersion;
+      } else if (
+        update.platformMembershipId &&
+        (update.platformMembershipId !== platformMembershipId ||
+          update.destinyVersion !== destinyVersion)
+      ) {
+        // Put it on the list of other updates that won't be flushed, and move on.
+        // Some updates, like settings, aren't profile-specific and can always
+        // be sent.
+        rest.push(update);
+        continue;
       }
 
-      let platformMembershipId: string | undefined;
-      let destinyVersion: DestinyVersion | undefined;
+      compactUpdate(compacted, update);
+    }
 
-      // Multiple updates to a particular object can be coalesced into a single update
-      // before being sent. We iterate from beginning (oldest update) to end (newest update).
-      const compacted: {
-        [key: string]: ProfileUpdateWithRollback;
-      } = {};
-      const rest: ProfileUpdateWithRollback[] = [];
-      for (const update of draft.updateQueue) {
-        // The first time we see a profile-specific update, keep track of which
-        // profile it was, and reject updates for the other profiles. This is
-        // because DIM API update can only work one profile at a time.
-        if (!platformMembershipId && !destinyVersion) {
-          platformMembershipId = update.platformMembershipId;
-          destinyVersion = update.destinyVersion;
-        } else if (
-          update.platformMembershipId &&
-          (update.platformMembershipId !== platformMembershipId ||
-            update.destinyVersion !== destinyVersion)
-        ) {
-          // Put it on the list of other updates that won't be flushed, and move on.
-          // Some updates, like settings, aren't profile-specific and can always
-          // be sent.
-          rest.push(update);
-          continue;
-        }
+    draft.updateQueue = Object.values(compacted);
 
-        compactUpdate(compacted, update);
-      }
+    // Set watermark to what we're going to flush.
+    // TODO: Maybe add a maximum update length?
+    draft.updateInProgressWatermark = draft.updateQueue.length;
 
-      draft.updateQueue = Object.values(compacted);
-
-      // Set watermark to what we're going to flush.
-      // TODO: Maybe add a maximum update length?
-      draft.updateInProgressWatermark = draft.updateQueue.length;
-
-      // Put the other updates we aren't going to send back on the end of the queue.
-      draft.updateQueue.push(...rest);
-    });
-  } finally {
-    stopTimer();
-  }
+    // Put the other updates we aren't going to send back on the end of the queue.
+    draft.updateQueue.push(...rest);
+  });
 }
 
 let unique = 0;
@@ -524,7 +624,7 @@ function compactUpdate(
   compacted: {
     [key: string]: ProfileUpdateWithRollback;
   },
-  update: ProfileUpdateWithRollback
+  update: ProfileUpdateWithRollback,
 ) {
   // Figure out the ID of the object being acted on
   let key: string;
@@ -585,9 +685,10 @@ function compactUpdate(
 
         // Eliminate chains of settings that get back to the initial state
         for (const key in payload) {
-          if (payload[key] === before[key]) {
-            delete payload[key];
-            delete before[key];
+          const typedKey = key as keyof typeof payload;
+          if (payload[typedKey] === before[typedKey]) {
+            delete payload[typedKey];
+            delete before[typedKey];
           }
         }
         if (_.isEmpty(payload)) {
@@ -725,30 +826,75 @@ function compactUpdate(
  * Record the result of an update call to the API
  */
 function applyFinishedUpdatesToQueue(state: DimApiState, results: ProfileUpdateResult[]) {
-  return produce(state, (draft) => {
-    const total = Math.min(state.updateInProgressWatermark, results?.length || 0);
+  const total = Math.min(state.updateInProgressWatermark, results?.length || 0);
 
-    for (let i = 0; i < total; i++) {
-      const update = state.updateQueue[i];
-      const result = results[i];
+  for (let i = 0; i < total; i++) {
+    const update = state.updateQueue[i];
+    const result = results[i];
 
-      if (!(result.status === 'Success' || result.status === 'NotFound')) {
-        errorLog(
-          'applyFinishedUpdatesToQueue',
-          'failed to update:',
-          result.status,
-          ':',
-          result.message,
-          update
-        );
-        reverseEffects(draft, update);
-      }
+    let message = 'unknown';
+    switch (update.action) {
+      case 'search':
+        message = update.payload.query;
+        break;
+      case 'delete_search':
+        message = update.payload.query;
+        break;
+      case 'delete_loadout':
+        message = update.payload;
+        break;
+      case 'tag':
+        message = `${update.payload.id}: ${update.before?.tag}/${update.before?.notes} => ${update.payload.tag}/${update.payload.notes}`;
+        break;
+      case 'item_hash_tag':
+        message = `${update.payload.hash}: ${update.before?.tag}/${update.before?.notes} => ${update.payload.tag}/${update.payload.notes}`;
+        break;
+      case 'tag_cleanup':
+        message = update.payload.length.toString();
+        break;
+      case 'loadout':
+        message = update.payload.name;
+        break;
+      case 'track_triumph':
+        message = update.payload.recordHash.toString();
+        break;
+      case 'save_search':
+        message = update.payload.query;
+        break;
+      case 'setting':
+        break;
     }
 
+    if (!(result.status === 'Success' || result.status === 'NotFound')) {
+      showNotification({
+        type: 'error',
+        title: t('Storage.UpdateInvalid'),
+        body: `${
+          update.action === 'loadout' && update.payload
+            ? t('Storage.UpdateInvalidBodyLoadout', { name: update.payload.name })
+            : t('Storage.UpdateInvalidBody')
+        }\n\n${result.status}(${message}): ${result.message}`,
+      });
+      errorLog('dim sync', update.action, result.status, message, result.message, update);
+      reportException('dim sync', new Error('invalid dim api update'), {
+        action: update.action,
+        status: result.status,
+        message: result.message,
+        update,
+        resultMessage: result.message,
+      });
+      state = produce(state, (draft) => reverseUpdateLocally(draft, update));
+    } else {
+      infoLog('dim sync', update.action, result.status, message, update);
+    }
+  }
+
+  return {
+    ...state,
     // There's currently no error that would leave them in the array
-    draft.updateQueue.splice(0, state.updateInProgressWatermark);
-    draft.updateInProgressWatermark = 0;
-  });
+    updateQueue: state.updateQueue.toSpliced(0, state.updateInProgressWatermark),
+    updateInProgressWatermark: 0,
+  };
 }
 
 /**
@@ -764,7 +910,6 @@ function deleteLoadout(state: DimApiState, loadoutId: string) {
       if (loadouts[loadoutId]) {
         profileWithLoadout = profile;
         loadout = loadouts[loadoutId];
-        delete loadouts[loadoutId];
         break;
       }
     }
@@ -775,37 +920,38 @@ function deleteLoadout(state: DimApiState, loadoutId: string) {
 
     const [platformMembershipId, destinyVersion] = parseProfileKey(profileWithLoadout);
 
-    draft.updateQueue.push({
+    const update: ProfileUpdateWithRollback = {
       action: 'delete_loadout',
       payload: loadoutId,
       before: loadout,
       platformMembershipId,
       destinyVersion,
-    });
+    };
+    applyUpdateLocally(draft, update);
+    draft.updateQueue.push(update);
   });
 }
 
 function updateLoadout(state: DimApiState, loadout: DimLoadout, account: DestinyAccount) {
+  if (loadout.id === 'equipped') {
+    throw new Error('You have to change the ID before saving the equipped loadout');
+  }
   return produce(state, (draft) => {
     const profileKey = makeProfileKey(account.membershipId, account.destinyVersion);
     const profile = ensureProfile(draft, profileKey);
     const loadouts = profile.loadouts;
     const newLoadout = convertDimLoadoutToApiLoadout(loadout);
-    const updateAction: ProfileUpdateWithRollback = {
+    const update: ProfileUpdateWithRollback = {
       action: 'loadout',
       payload: newLoadout,
       platformMembershipId: account.membershipId,
       destinyVersion: account.destinyVersion,
     };
-
     if (loadouts[loadout.id]) {
-      updateAction.before = loadouts[loadout.id];
-      loadouts[loadout.id] = newLoadout;
-      draft.updateQueue.push(updateAction);
-    } else {
-      loadouts[loadout.id] = newLoadout;
-      draft.updateQueue.push(updateAction);
+      update.before = loadouts[loadout.id];
     }
+    applyUpdateLocally(draft, update);
+    draft.updateQueue.push(update);
   });
 }
 
@@ -813,7 +959,8 @@ function setTag(
   draft: Draft<DimApiState>,
   itemId: string,
   tag: TagValue | undefined,
-  account: DestinyAccount
+  craftedDate: number | undefined,
+  account: DestinyAccount,
 ) {
   if (!itemId || itemId === '0') {
     errorLog('setTag', 'Cannot tag a non-instanced item. Use setItemHashTag instead');
@@ -825,40 +972,26 @@ function setTag(
   const tags = profile.tags;
   const existingTag = tags[itemId];
 
+  if (tag) {
+    if (existingTag?.tag === tag) {
+      return; // nothing to do
+    }
+  } else if (!existingTag?.tag) {
+    return; // nothing to do
+  }
+
   const updateAction: ProfileUpdateWithRollback = {
     action: 'tag',
     payload: {
       id: itemId,
       tag: tag ?? null,
+      craftedDate: craftedDate ?? existingTag?.craftedDate,
     },
     before: existingTag ? { ...existingTag } : undefined,
     platformMembershipId: account.membershipId,
     destinyVersion: account.destinyVersion,
   };
-
-  if (tag) {
-    if (existingTag) {
-      if (existingTag.tag === tag) {
-        return; // nothing to do
-      }
-      existingTag.tag = tag;
-    } else {
-      tags[itemId] = {
-        id: itemId,
-        tag,
-      };
-    }
-  } else {
-    if (existingTag?.tag) {
-      delete existingTag.tag;
-      if (!existingTag.notes) {
-        delete tags[itemId];
-      }
-    } else {
-      return; // nothing to do
-    }
-  }
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
@@ -866,10 +999,18 @@ function setItemHashTag(
   draft: Draft<DimApiState>,
   itemHash: number,
   tag: TagValue | undefined,
-  account: DestinyAccount
+  account: DestinyAccount,
 ) {
   const tags = draft.itemHashTags;
   const existingTag = tags[itemHash];
+
+  if (tag) {
+    if (existingTag?.tag === tag) {
+      return; // nothing to do
+    }
+  } else if (!existingTag?.tag) {
+    return; // nothing to do
+  }
 
   const updateAction: ProfileUpdateWithRollback = {
     action: 'item_hash_tag',
@@ -881,23 +1022,7 @@ function setItemHashTag(
     platformMembershipId: account.membershipId,
     destinyVersion: account.destinyVersion,
   };
-
-  if (tag) {
-    if (existingTag) {
-      existingTag.tag = tag;
-    } else {
-      tags[itemHash] = {
-        hash: itemHash,
-        tag,
-      };
-    }
-  } else {
-    delete existingTag?.tag;
-    if (!existingTag?.tag && !existingTag?.notes) {
-      delete tags[itemHash];
-    }
-  }
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
@@ -905,7 +1030,8 @@ function setNote(
   draft: Draft<DimApiState>,
   itemId: string,
   notes: string | undefined,
-  account: DestinyAccount
+  craftedDate: number | undefined,
+  account: DestinyAccount,
 ) {
   if (!itemId || itemId === '0') {
     errorLog('setNote', 'Cannot note a non-instanced item. Use setItemHashNote instead');
@@ -921,28 +1047,13 @@ function setNote(
     payload: {
       id: itemId,
       notes: notes && notes.length > 0 ? notes : null,
+      craftedDate: craftedDate ?? existingTag?.craftedDate,
     },
     before: existingTag ? { ...existingTag } : undefined,
     platformMembershipId: account.membershipId,
     destinyVersion: account.destinyVersion,
   };
-
-  if (notes && notes.length > 0) {
-    if (existingTag) {
-      existingTag.notes = notes;
-    } else {
-      tags[itemId] = {
-        id: itemId,
-        notes,
-      };
-    }
-  } else {
-    delete existingTag?.notes;
-    if (!existingTag?.tag && !existingTag?.notes) {
-      delete tags[itemId];
-    }
-  }
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
@@ -950,7 +1061,7 @@ function setItemHashNote(
   draft: Draft<DimApiState>,
   itemHash: number,
   notes: string | undefined,
-  account: DestinyAccount
+  account: DestinyAccount,
 ) {
   const tags = draft.itemHashTags;
   const existingTag = tags[itemHash];
@@ -965,23 +1076,7 @@ function setItemHashNote(
     platformMembershipId: account.membershipId,
     destinyVersion: account.destinyVersion,
   };
-
-  if (notes && notes.length > 0) {
-    if (existingTag) {
-      existingTag.notes = notes;
-    } else {
-      tags[itemHash] = {
-        hash: itemHash,
-        notes,
-      };
-    }
-  } else {
-    delete existingTag?.notes;
-    if (!existingTag?.tag && !existingTag?.notes) {
-      delete tags[itemHash];
-    }
-  }
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
@@ -991,19 +1086,15 @@ function tagCleanup(state: DimApiState, itemIdsToRemove: string[], account: Dest
     return state;
   }
   return produce(state, (draft) => {
-    const profileKey = makeProfileKeyFromAccount(account);
-    const profile = ensureProfile(draft, profileKey);
-    for (const itemId of itemIdsToRemove) {
-      delete profile.tags[itemId];
-    }
-
-    draft.updateQueue.push({
+    const updateAction: ProfileUpdateWithRollback = {
       action: 'tag_cleanup',
       payload: itemIdsToRemove,
       // "before" isn't really valuable here
       platformMembershipId: account.membershipId,
       destinyVersion: account.destinyVersion,
-    });
+    };
+    applyUpdateLocally(draft, updateAction);
+    draft.updateQueue.push(updateAction);
   });
 }
 
@@ -1011,11 +1102,8 @@ function trackTriumph(
   draft: Draft<DimApiState>,
   account: DestinyAccount,
   recordHash: number,
-  tracked: boolean
+  tracked: boolean,
 ) {
-  const profileKey = makeProfileKeyFromAccount(account);
-  const profile = ensureProfile(draft, profileKey);
-
   const updateAction: ProfileUpdateWithRollback = {
     action: 'track_triumph',
     payload: {
@@ -1029,35 +1117,24 @@ function trackTriumph(
     platformMembershipId: account.membershipId,
     destinyVersion: account.destinyVersion,
   };
-
-  const triumphs = profile.triumphs.filter((h) => h !== recordHash);
-  if (tracked) {
-    triumphs.push(recordHash);
-  }
-  profile.triumphs = triumphs;
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
-// Real hack to fake out enough store to select out the search configs
-function stubSearchRootState(account: DestinyAccount) {
-  return {
-    accounts: {
-      accounts: [account],
-      currentAccount: 0,
-    },
-    inventory: { stores: [] },
-    dimApi: { profiles: {} },
-    manifest: {},
-  } as any as RootState;
-}
-
-function searchUsed(draft: Draft<DimApiState>, account: DestinyAccount, query: string) {
+function searchUsed(
+  draft: Draft<DimApiState>,
+  account: DestinyAccount,
+  query: string,
+  type: SearchType,
+) {
   const destinyVersion = account.destinyVersion;
-  const searchConfigs = searchConfigSelector(stubSearchRootState(account));
+  // Note: memoized
+  const filtersMap = buildItemFiltersMap(destinyVersion);
 
   // Canonicalize the query so we always save it the same way
-  const { canonical, saveInHistory } = parseAndValidateQuery(query, searchConfigs);
+  const { canonical, saveInHistory } = parseAndValidateQuery(query, filtersMap, {
+    customStats: draft.settings.customStats ?? [],
+  } as FilterContext);
   if (!saveInHistory) {
     errorLog('searchUsed', 'Query not eligible to be saved in history', query);
     return;
@@ -1068,27 +1145,19 @@ function searchUsed(draft: Draft<DimApiState>, account: DestinyAccount, query: s
     action: 'search',
     payload: {
       query,
+      type,
     },
     destinyVersion,
   };
+  applyUpdateLocally(draft, updateAction);
+  draft.updateQueue.push(updateAction);
 
+  // Trim excess searches
+
+  // TODO: maybe this should be max per type?
   const searches = draft.searches[destinyVersion];
-  const existingSearch = searches.find((s) => s.query === query);
-
-  if (existingSearch) {
-    existingSearch.lastUsage = Date.now();
-    existingSearch.usageCount++;
-  } else {
-    searches.push({
-      query,
-      usageCount: 1,
-      saved: false,
-      lastUsage: Date.now(),
-    });
-  }
-
   if (searches.length > MAX_SEARCH_HISTORY) {
-    const sortedSearches = [...searches].sort(recentSearchComparator);
+    const sortedSearches = searches.toSorted(recentSearchComparator);
 
     const numBuiltinSearches = count(sortedSearches, (s) => s.usageCount <= 0);
 
@@ -1097,106 +1166,108 @@ function searchUsed(draft: Draft<DimApiState>, account: DestinyAccount, query: s
       const lastSearch = sortedSearches.pop()!;
       // Never try to delete the built-in searches or saved searches
       if (!lastSearch.saved && lastSearch.usageCount > 0) {
-        deleteSearch(draft, destinyVersion, lastSearch.query);
+        deleteSearch(draft, destinyVersion, lastSearch.query, lastSearch.type);
       }
     }
   }
-
-  draft.updateQueue.push(updateAction);
 }
 
 function saveSearch(
   account: DestinyAccount,
   draft: Draft<DimApiState>,
   query: string,
-  saved: boolean
+  saved: boolean,
+  type: SearchType,
 ) {
   const destinyVersion = account.destinyVersion;
-  const searchConfigs = searchConfigSelector(stubSearchRootState(account));
+  // Note: memoized
+  const filtersMap = buildItemFiltersMap(destinyVersion);
 
   // Canonicalize the query so we always save it the same way
-  const { canonical, saveable } = parseAndValidateQuery(query, searchConfigs);
-  if (!saveable) {
+  const { canonical, saveable } = parseAndValidateQuery(query, filtersMap, {
+    customStats: draft.settings.customStats ?? [],
+  } as FilterContext);
+  if (!saveable && saved) {
     errorLog('searchUsed', 'Query not eligible to be saved', query);
     return;
   }
   query = canonical;
+
+  const searches = draft.searches[destinyVersion];
+  const existingSearch = searches.find((s) => s.query === query);
+
+  if (!existingSearch && saveable) {
+    // Save this as a "used" search first. This may happen if it's a type of
+    // search we wouldn't normally save to history like a "simple" filter. We
+    // don't go through searchUsed since that errors if the search isn't
+    // saveable.
+    const searchUsedUpdate: ProfileUpdateWithRollback = {
+      action: 'search',
+      payload: {
+        query,
+        type,
+      },
+      destinyVersion,
+    };
+    applyUpdateLocally(draft, searchUsedUpdate);
+    draft.updateQueue.push(searchUsedUpdate);
+  }
 
   const updateAction: ProfileUpdateWithRollback = {
     action: 'save_search',
     payload: {
       query,
       saved,
+      type,
     },
     destinyVersion,
   };
-
-  const searches = draft.searches[destinyVersion];
-  const existingSearch = searches.find((s) => s.query === query);
-
-  if (existingSearch) {
-    existingSearch.saved = saved;
-  } else {
-    // Save this as a "used" search first. This may happen if it's a type of search we
-    // wouldn't normally save to history like a "simple" filter.
-    searches.push({
-      query,
-      usageCount: 1,
-      saved: true,
-      lastUsage: Date.now(),
-    });
-    draft.updateQueue.push({
-      action: 'search',
-      payload: {
-        query,
-      },
-      destinyVersion,
-    });
-  }
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
-function deleteSearch(draft: Draft<DimApiState>, destinyVersion: DestinyVersion, query: string) {
+function deleteSearch(
+  draft: Draft<DimApiState>,
+  destinyVersion: DestinyVersion,
+  query: string,
+  type: SearchType,
+) {
   const updateAction: ProfileUpdateWithRollback = {
     action: 'delete_search',
     payload: {
       query,
+      type,
     },
     destinyVersion,
   };
-
-  draft.searches[destinyVersion] = draft.searches[destinyVersion].filter((s) => s.query !== query);
-
+  applyUpdateLocally(draft, updateAction);
   draft.updateQueue.push(updateAction);
 }
 
 function cleanupInvalidSearches(draft: Draft<DimApiState>, account: DestinyAccount) {
   // Filter out saved and builtin searches
   const searches = draft.searches[account.destinyVersion].filter(
-    (s) => !s.saved && s.usageCount > 0
+    (s) => !s.saved && s.usageCount > 0,
   );
 
   if (!searches.length) {
     return;
   }
 
-  const searchConfigs = searchConfigSelector(stubSearchRootState(account));
+  // Note: memoized
+  const filtersMap = buildItemFiltersMap(account.destinyVersion);
   for (const search of draft.searches[account.destinyVersion]) {
     if (search.saved || search.usageCount <= 0) {
       continue;
     }
 
-    const { saveInHistory } = parseAndValidateQuery(search.query, searchConfigs);
+    const { saveInHistory } = parseAndValidateQuery(search.query, filtersMap, {
+      customStats: draft.settings.customStats ?? [],
+    } as FilterContext);
     if (!saveInHistory) {
-      deleteSearch(draft, account.destinyVersion, search.query);
+      deleteSearch(draft, account.destinyVersion, search.query, search.type);
     }
   }
-}
-
-function reverseEffects(draft: Draft<DimApiState>, update: ProfileUpdateWithRollback) {
-  // TODO: put things back the way they were
-  infoLog('reverseEffects', 'TODO: Reversing', draft, update);
 }
 
 export function parseProfileKey(profileKey: string): [string, DestinyVersion] {
@@ -1210,10 +1281,173 @@ export function parseProfileKey(profileKey: string): [string, DestinyVersion] {
 function ensureProfile(draft: Draft<DimApiState>, profileKey: string) {
   if (!draft.profiles[profileKey]) {
     draft.profiles[profileKey] = {
+      profileLastLoaded: 0,
       loadouts: {},
       tags: {},
       triumphs: [],
     };
   }
   return draft.profiles[profileKey];
+}
+
+function applyUpdateLocally(draft: Draft<DimApiState>, update: ProfileUpdateWithRollback) {
+  switch (update.action) {
+    case 'setting': {
+      // Intentionally avoiding Object.assign because of immer
+      // for (const [key, value] of Object.entries(update.payload)) {
+      //   draft.settings[key] = value;
+      // }
+      Object.assign(draft.settings, update.payload);
+      break;
+    }
+    case 'search': {
+      const { destinyVersion } = update;
+      const { query, type } = update.payload;
+      const searches = draft.searches[destinyVersion!];
+      const existingSearch = searches.find((s) => s.query === query);
+
+      if (existingSearch) {
+        existingSearch.lastUsage = Date.now();
+        existingSearch.usageCount++;
+      } else {
+        searches.push({
+          query,
+          usageCount: 1,
+          saved: false,
+          lastUsage: Date.now(),
+          type,
+        });
+      }
+      break;
+    }
+    case 'delete_search': {
+      const { query } = update.payload;
+      const { destinyVersion } = update;
+      draft.searches[destinyVersion!] = draft.searches[destinyVersion!].filter(
+        (s) => s.query !== query,
+      );
+      break;
+    }
+    case 'delete_loadout': {
+      const { platformMembershipId, destinyVersion } = update;
+      const loadoutId = update.payload;
+      const profile = makeProfileKey(platformMembershipId!, destinyVersion!);
+      delete draft.profiles[profile]?.loadouts[loadoutId];
+      break;
+    }
+    case 'tag': {
+      const itemAnnotation = update.payload;
+      const itemId = itemAnnotation.id;
+      const { platformMembershipId, destinyVersion } = update;
+      const profileKey = makeProfileKey(platformMembershipId!, destinyVersion!);
+      const tags = ensureProfile(draft, profileKey).tags;
+      const existingAnnotation = tags[itemId];
+      if (existingAnnotation) {
+        if (itemAnnotation.tag === null) {
+          delete existingAnnotation.tag;
+        } else if (itemAnnotation.tag) {
+          existingAnnotation.tag = itemAnnotation.tag;
+        }
+        if (itemAnnotation.notes === null) {
+          delete existingAnnotation.notes;
+        } else if (itemAnnotation.notes) {
+          existingAnnotation.notes = itemAnnotation.notes;
+        }
+        if (!existingAnnotation.tag && !existingAnnotation.notes) {
+          delete tags[itemId];
+        }
+      } else {
+        tags[itemId] = itemAnnotation;
+      }
+      break;
+    }
+    case 'item_hash_tag': {
+      const itemAnnotation = update.payload;
+      const tags = draft.itemHashTags;
+      const existingAnnotation = tags[itemAnnotation.hash];
+      if (existingAnnotation) {
+        if (itemAnnotation.tag === null) {
+          delete existingAnnotation.tag;
+        } else if (itemAnnotation.tag) {
+          existingAnnotation.tag = itemAnnotation.tag;
+        }
+        if (itemAnnotation.notes === null) {
+          delete existingAnnotation.notes;
+        } else if (itemAnnotation.notes) {
+          existingAnnotation.notes = itemAnnotation.notes;
+        }
+        if (!existingAnnotation.tag && !existingAnnotation.notes) {
+          delete tags[itemAnnotation.hash];
+        }
+      } else {
+        tags[itemAnnotation.hash] = itemAnnotation;
+      }
+      break;
+    }
+    case 'tag_cleanup': {
+      const { platformMembershipId, destinyVersion } = update;
+      const profileKey = makeProfileKey(platformMembershipId!, destinyVersion!);
+      const profile = ensureProfile(draft, profileKey);
+      for (const itemId of update.payload) {
+        delete profile.tags[itemId];
+      }
+      break;
+    }
+    case 'loadout': {
+      const { platformMembershipId, destinyVersion, payload: loadout } = update;
+      const profileKey = makeProfileKey(platformMembershipId!, destinyVersion!);
+      if (loadout) {
+        ensureProfile(draft, profileKey).loadouts[loadout.id] = update.payload;
+      } else if (update.before?.id) {
+        // This handles the case where we're reversing a create-loadout action.
+        delete ensureProfile(draft, profileKey).loadouts[update.before.id];
+      }
+      break;
+    }
+    case 'track_triumph': {
+      const { platformMembershipId, destinyVersion } = update;
+      const profileKey = makeProfileKey(platformMembershipId!, destinyVersion!);
+      const profile = ensureProfile(draft, profileKey);
+      const { recordHash, tracked } = update.payload;
+
+      const triumphs = profile.triumphs.filter((h) => h !== recordHash);
+      if (tracked) {
+        triumphs.push(recordHash);
+      }
+      profile.triumphs = triumphs;
+      break;
+    }
+    case 'save_search': {
+      const { query, saved } = update.payload;
+      const { destinyVersion } = update;
+      const searches = draft.searches[destinyVersion!];
+      const existingSearch = searches.find((s) => s.query === query);
+
+      // This should always exist
+      if (existingSearch) {
+        existingSearch.saved = saved;
+      }
+      break;
+    }
+  }
+}
+
+function reverseUpdateLocally(draft: Draft<DimApiState>, update: ProfileUpdateWithRollback) {
+  switch (update.action) {
+    case 'delete_loadout': {
+      const { platformMembershipId, destinyVersion } = update;
+      const loadoutId = update.payload;
+      const profileKey = makeProfileKey(platformMembershipId!, destinyVersion!);
+      const loadouts = ensureProfile(draft, profileKey).loadouts;
+      loadouts[loadoutId] = update.before as Loadout;
+      break;
+    }
+    default:
+      applyUpdateLocally(draft, {
+        ...update,
+        payload: update.before,
+        before: update.payload,
+      } as ProfileUpdateWithRollback);
+      break;
+  }
 }

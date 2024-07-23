@@ -1,9 +1,8 @@
-import { DimItem, DimPlug, DimSocket } from 'app/inventory/item-types';
-import { compareBy } from 'app/utils/comparators';
+import { DimItem, DimSocket } from 'app/inventory/item-types';
 import { InventoryWishListRoll } from 'app/wishlists/wishlists';
-import clsx from 'clsx';
-import React from 'react';
+import { PlugClickHandler } from './ItemSockets';
 import Plug from './Plug';
+import './Socket.scss';
 
 /**
  * A socket may have multiple plugs - this can represent either a perk column or a mod socket.
@@ -11,46 +10,41 @@ import Plug from './Plug';
 export default function Socket({
   item,
   socket,
+  noTooltip,
   wishlistRoll,
   onClick,
+  pluggedOnly = false,
 }: {
   item: DimItem;
   socket: DimSocket;
+  noTooltip?: boolean;
   wishlistRoll?: InventoryWishListRoll;
-  onClick?(item: DimItem, socket: DimSocket, plug: DimPlug, hasMenu: boolean): void;
+  onClick?: PlugClickHandler;
+  pluggedOnly?: boolean;
 }) {
-  const hasMenu = Boolean(!socket.isPerk && socket.socketDefinition.plugSources);
+  const hasMenu = Boolean(onClick && !socket.isPerk && socket.socketDefinition.plugSources);
   if (!socket.plugOptions.length) {
     return null;
   }
-  let plugOptions = socket.plugOptions;
-
-  // if this is a crafted item's plugset, sort plugs by their required level.
-  // TO-DO: the order is correct in the original plugset def,
-  // we should address whatever is changing plug order in DIM
-  if (socket.craftingData) {
-    plugOptions = [...plugOptions].sort(
-      compareBy((p) => socket.craftingData![p.plugDef.hash]?.requiredLevel ?? 0)
-    );
-  }
 
   return (
-    <div
-      className={clsx('item-socket', {
-        hasMenu,
-      })}
-    >
-      {plugOptions.map((plug) => (
-        <Plug
-          key={plug.plugDef.hash}
-          plug={plug}
-          item={item}
-          socketInfo={socket}
-          wishlistRoll={wishlistRoll}
-          hasMenu={hasMenu}
-          onClick={onClick && (() => onClick(item, socket, plug, hasMenu))}
-        />
-      ))}
+    <div className="item-socket">
+      {socket.plugOptions.map(
+        (plug) =>
+          (!pluggedOnly || socket.plugged === plug) && (
+            <Plug
+              key={plug.plugDef.hash}
+              plug={plug}
+              item={item}
+              socketInfo={socket}
+              noTooltip={noTooltip}
+              wishlistRoll={wishlistRoll}
+              hasMenu={hasMenu}
+              isMod={socket.isMod}
+              onClick={onClick && (() => onClick(item, socket, plug, hasMenu))}
+            />
+          ),
+      )}
     </div>
   );
 }

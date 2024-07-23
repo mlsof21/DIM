@@ -1,20 +1,20 @@
-import { stripAdept } from 'app/compare/compare-buttons';
+import { compareNameQuery } from 'app/compare/compare-utils';
 import BungieImage from 'app/dim-ui/BungieImage';
 import ElementIcon from 'app/dim-ui/ElementIcon';
+import { ArmorSlotIcon, WeaponTypeIcon } from 'app/dim-ui/ItemCategoryIcon';
 import { PressTip } from 'app/dim-ui/PressTip';
 import { SpecialtyModSlotIcon } from 'app/dim-ui/SpecialtyModSlotIcon';
-import { getArmorSlotSvgIcon, getWeaponTypeSvgIcon } from 'app/dim-ui/svgs/itemCategory';
-import { DimItem } from 'app/inventory/item-types';
 import { DefItemIcon } from 'app/inventory/ItemIcon';
+import { DimItem } from 'app/inventory/item-types';
 import { DimPlugTooltip } from 'app/item-popup/PlugTooltip';
-import { quoteFilterString } from 'app/search/query-parser';
 import {
   classFilter,
   damageFilter,
   itemCategoryFilter,
   itemTypeFilter,
-} from 'app/search/search-filters/known-values';
-import { modslotFilter } from 'app/search/search-filters/sockets';
+} from 'app/search/items/search-filters/known-values';
+import { modslotFilter } from 'app/search/items/search-filters/sockets';
+import { quoteFilterString } from 'app/search/query-parser';
 import { getInterestingSocketMetadatas } from 'app/utils/item-utils';
 import {
   getIntrinsicArmorPerkSocket,
@@ -35,9 +35,9 @@ import styles from './TriageFactors.m.scss';
 export interface Factor {
   id: string;
   /** bother checking this factor, if the seed item (the one in the item popup) returns truthy */
-  runIf(item: DimItem): unknown;
-  render(item: DimItem): React.ReactElement | null;
-  filter(item: DimItem): string;
+  runIf: (item: DimItem) => unknown;
+  render: (item: DimItem) => React.ReactElement | null;
+  filter: (item: DimItem) => string;
 }
 
 export type FactorComboCategory = keyof typeof factorCombos;
@@ -49,7 +49,7 @@ const itemFactors: Record<string, Factor> = {
     render: () => null,
     // let's probably not show class icon for now. just invisibly include it in the considerations.
     // render: (item) => (<PressTip minimal elementType="span" tooltip={item.classTypeNameLocalized}><ClassIcon classType={item.classType} className={styles.classIcon} /></PressTip>),
-    filter: classFilter.fromItem!,
+    filter: classFilter.fromItem,
   },
   name: {
     id: 'name',
@@ -60,32 +60,23 @@ const itemFactors: Record<string, Factor> = {
         <span>{item.name}</span>
       </>
     ),
-    filter: (item) => `name:"${stripAdept(item.name)}"`,
+    filter: (item) => compareNameQuery(item),
   },
   element: {
-    id: 'element', //             don't compare exotic weapon elements, that's silly.
-    runIf: (item) => item.element && !(item.isExotic && item.bucket.inWeapons),
+    id: 'element', // we're done using this for armor as of lightfall
+    runIf: (item) => item.element && item.bucket.inWeapons,
     render: (item) => (
       <PressTip minimal elementType="span" tooltip={item.element?.displayProperties.name}>
-        <ElementIcon className={clsx(styles.factorIcon)} element={item.element} />
+        <ElementIcon className={styles.factorIcon} element={item.element} />
       </PressTip>
     ),
-    filter: damageFilter.fromItem!,
+    filter: damageFilter.fromItem,
   },
   weaponType: {
     id: 'weaponType',
     runIf: (item) => item.bucket.inWeapons,
-    render: (item) => {
-      const weaponIcon = getWeaponTypeSvgIcon(item);
-      return weaponIcon ? (
-        <PressTip minimal elementType="span" tooltip={item.typeName}>
-          <img className={clsx(styles.inlineIcon2, styles.weaponSvg)} src={weaponIcon} />
-        </PressTip>
-      ) : (
-        <>{item.typeName}</>
-      );
-    },
-    filter: itemCategoryFilter.fromItem!,
+    render: (item) => <WeaponTypeIcon item={item} className={styles.inlineIcon2} />,
+    filter: itemCategoryFilter.fromItem,
   },
   specialtySocket: {
     id: 'specialtySocket',
@@ -106,7 +97,7 @@ const itemFactors: Record<string, Factor> = {
               itemDef={intrinsicArmorPerk.plugDef}
               borderless={true}
             />
-          </PressTip>
+          </PressTip>,
         );
       }
 
@@ -128,8 +119,8 @@ const itemFactors: Record<string, Factor> = {
       const intrinsicPerk = getIntrinsicArmorPerkSocket(item)?.plugged;
       const largePerkFilterString =
         intrinsicPerk &&
-        `perkname:${quoteFilterString(intrinsicPerk.plugDef.displayProperties.name)}`;
-      const modSlotFilterString = modslotFilter.fromItem!(item);
+        `exactperk:${quoteFilterString(intrinsicPerk.plugDef.displayProperties.name)}`;
+      const modSlotFilterString = modslotFilter.fromItem(item);
       return [largePerkFilterString, modSlotFilterString].filter(Boolean).join(' ');
     },
   },
@@ -137,14 +128,9 @@ const itemFactors: Record<string, Factor> = {
     id: 'armorSlot',
     runIf: (item) => item.bucket.inArmor,
     render: (item) => (
-      <PressTip minimal elementType="span" tooltip={item.typeName}>
-        <img
-          src={getArmorSlotSvgIcon(item)}
-          className={clsx(styles.inlineIcon2, styles.weaponSvg, styles.factorIcon)}
-        />
-      </PressTip>
+      <ArmorSlotIcon item={item} className={clsx(styles.inlineIcon2, styles.factorIcon)} />
     ),
-    filter: itemTypeFilter.fromItem!,
+    filter: itemTypeFilter.fromItem,
   },
   archetype: {
     id: 'archetype',
@@ -164,7 +150,7 @@ const itemFactors: Record<string, Factor> = {
       ) : null;
     },
     filter: (item) =>
-      `perkname:${quoteFilterString(getWeaponArchetype(item)!.displayProperties.name)}`,
+      `exactperk:${quoteFilterString(getWeaponArchetype(item)!.displayProperties.name)}`,
   },
 };
 
@@ -177,8 +163,8 @@ export const factorCombos = {
     [itemFactors.name],
   ],
   Armor: [
-    [itemFactors.class, itemFactors.element, itemFactors.specialtySocket, itemFactors.armorSlot],
-    [itemFactors.class, itemFactors.element, itemFactors.specialtySocket],
+    [itemFactors.class, itemFactors.specialtySocket, itemFactors.armorSlot],
+    [itemFactors.class, itemFactors.specialtySocket],
     [itemFactors.class, itemFactors.name],
   ],
   General: [[itemFactors.element]],

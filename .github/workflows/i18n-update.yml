@@ -12,28 +12,26 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 3
           token: ${{ secrets.I18N_PAT }}
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@v4
         with:
-          node-version: 18.x
-          cache: yarn
+          node-version-file: '.nvmrc'
+          cache: pnpm
 
       - name: Install
-        run: yarn install --frozen-lockfile --prefer-offline
+        run: pnpm install --frozen-lockfile --prefer-offline
 
-      - name: yarn i18n
-        run: yarn i18n
+      - name: pnpm i18n
+        run: pnpm i18n
 
-      - name: Check for new files
-        id: data
-        run: echo ::set-output name=porcelain::"$(git status --porcelain)"
-
-      - uses: stefanzweifel/git-auto-commit-action@v4
-        if: steps.data.outputs.porcelain
+      - name: Commit files
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: Apply i18n updates

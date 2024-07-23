@@ -1,7 +1,8 @@
 import { D1BucketHashes } from 'app/search/d1-known-values';
+import { filterMap } from 'app/utils/collections';
+import { HashLookup, StringLookup } from 'app/utils/util-types';
 import { BucketCategory } from 'bungie-api-ts/destiny2';
 import { BucketHashes } from 'data/d2/generated-enums';
-import _ from 'lodash';
 import type {
   D1BucketCategory,
   DimBucketType,
@@ -43,31 +44,31 @@ const bucketToTypeRaw = {
   [BucketHashes.Emblems]: 'Emblem',
 } as const;
 
-export type D1BucketTypes = typeof bucketToTypeRaw[keyof typeof bucketToTypeRaw];
+export type D1BucketTypes = (typeof bucketToTypeRaw)[keyof typeof bucketToTypeRaw];
 
 // A mapping from the bucket hash to DIM item types
 const bucketToType: {
   [hash: number]: DimBucketType | undefined;
 } = bucketToTypeRaw;
 
-export const vaultTypes = {
+export const vaultTypes: HashLookup<string> = {
   3003523923: 'Armor',
   4046403665: 'Weapons',
   138197802: 'General',
 };
 
-const sortToVault = {
+const sortToVault: StringLookup<number> = {
   Armor: 3003523923,
   Weapons: 4046403665,
   General: 138197802,
 };
 
 const bucketHashToSort: { [bucketHash: number]: D1BucketCategory } = {};
-_.forIn(D1Categories, (bucketHashes, category: D1BucketCategory) => {
-  bucketHashes.forEach((bucketHash) => {
-    bucketHashToSort[bucketHash] = category;
-  });
-});
+for (const [category, bucketHashes] of Object.entries(D1Categories)) {
+  for (const bucketHash of bucketHashes) {
+    bucketHashToSort[bucketHash] = category as D1BucketCategory;
+  }
+}
 
 export function getBuckets(defs: D1ManifestDefinitions) {
   const buckets: InventoryBuckets = {
@@ -77,6 +78,8 @@ export function getBuckets(defs: D1ManifestDefinitions) {
       description: 'Unknown items. DIM needs a manifest update.',
       name: 'Unknown',
       hash: -1,
+      // default to false. an equipped item existing, will override this in inv display
+      equippable: false,
       hasTransferDestination: false,
       category: BucketCategory.Item,
       capacity: Number.MAX_SAFE_INTEGER,
@@ -85,10 +88,10 @@ export function getBuckets(defs: D1ManifestDefinitions) {
       accountWide: false,
     },
     setHasUnknown() {
-      this.byCategory[this.unknown.sort] = [this.unknown];
+      this.byCategory[this.unknown.sort!] = [this.unknown];
     },
   };
-  _.forIn(defs.InventoryBucket, (def) => {
+  for (const def of Object.values(defs.InventoryBucket.getAll())) {
     if (def.enabled) {
       const type = bucketToType[def.hash];
       const sort = bucketHashToSort[def.hash] ?? vaultTypes[def.hash];
@@ -96,6 +99,7 @@ export function getBuckets(defs: D1ManifestDefinitions) {
         description: def.bucketDescription,
         name: def.bucketName,
         hash: def.hash,
+        equippable: def.category === BucketCategory.Equippable,
         hasTransferDestination: def.hasTransferDestination,
         capacity: def.itemCount,
         accountWide: false,
@@ -109,16 +113,17 @@ export function getBuckets(defs: D1ManifestDefinitions) {
       }
       buckets.byHash[bucket.hash] = bucket;
     }
-  });
-  _.forIn(buckets.byHash, (bucket: InventoryBucket) => {
+  }
+  for (const bucket of Object.values(buckets.byHash)) {
     if (bucket.sort && sortToVault[bucket.sort] && sortToVault[bucket.sort] !== bucket.hash) {
-      bucket.vaultBucket = buckets.byHash[sortToVault[bucket.sort]];
+      bucket.vaultBucket = buckets.byHash[sortToVault[bucket.sort]!];
     }
-  });
-  _.forIn(D1Categories, (bucketHashes, category) => {
-    buckets.byCategory[category] = _.compact(
-      bucketHashes.map((bucketHash) => buckets.byHash[bucketHash])
+  }
+  for (const [category, bucketHashes] of Object.entries(D1Categories)) {
+    buckets.byCategory[category] = filterMap(
+      bucketHashes,
+      (bucketHash) => buckets.byHash[bucketHash],
     );
-  });
+  }
   return buckets;
 }

@@ -1,19 +1,15 @@
 import 'app/dim-ui/EnergyMeterIncrements.scss';
 import { t } from 'app/i18next-t';
 import { DimItem } from 'app/inventory/item-types';
-import { DestinyEnergyType } from 'bungie-api-ts/destiny2';
+import { EnergySwap } from 'app/loadout-builder/generated-sets/GeneratedSetItem';
+import { MAX_ARMOR_ENERGY_CAPACITY } from 'app/search/d2-known-values';
 import clsx from 'clsx';
 import { PressTip } from './PressTip';
 
-export const energyStyles: { [energy in DestinyEnergyType]?: string } = {
-  [DestinyEnergyType.Arc]: 'arc',
-  [DestinyEnergyType.Thermal]: 'solar',
-  [DestinyEnergyType.Void]: 'void',
-  [DestinyEnergyType.Stasis]: 'stasis',
-} as const;
+// TODO special display for T10 -> T10 + exotic artifice?
 
 /** this accepts either an item, or a partial DimItem.energy */
-export function EnergyIncrements({
+function EnergyIncrements({
   item,
   energy,
 }:
@@ -21,19 +17,18 @@ export function EnergyIncrements({
   | {
       item?: undefined;
       energy: {
-        energyType: DestinyEnergyType;
         energyCapacity: number;
         energyUsed: number;
       };
     }) {
-  const { energyCapacity, energyUsed, energyType } = item?.energy ?? energy!;
+  const { energyCapacity, energyUsed } = item?.energy ?? energy!;
   // layer in possible total slots, then earned slots, then currently used slots
-  const meterIncrements = Array<string>(10)
+  const meterIncrements = Array<string>(MAX_ARMOR_ENERGY_CAPACITY)
     .fill('unavailable')
     .fill('unused', 0, energyCapacity)
     .fill('used', 0, energyUsed);
   return (
-    <div className={clsx('energyMeterIncrements', 'small', energyStyles[energyType])}>
+    <div className={clsx('energyMeterIncrements', 'small')}>
       {meterIncrements.map((incrementStyle, i) => (
         <div key={i} className={incrementStyle} />
       ))}
@@ -42,24 +37,17 @@ export function EnergyIncrements({
 }
 
 export function EnergyIncrementsWithPresstip({
-  item,
   energy,
   wrapperClass,
 }: {
-  item?: DimItem;
-  energy?: {
-    energyType: DestinyEnergyType;
+  energy: {
     energyCapacity: number;
     energyUsed: number;
   };
   wrapperClass?: string | undefined;
 }) {
-  const energy_ = energy ?? item?.energy;
-  if (!energy_) {
-    return null;
-  }
-  const { energyType, energyCapacity, energyUsed } = energy_;
-  const energyUnused = energyCapacity - energyUsed;
+  const { energyCapacity, energyUsed } = energy;
+  const energyUnused = Math.max(energyCapacity - energyUsed, 0);
 
   return (
     <PressTip
@@ -70,17 +58,23 @@ export function EnergyIncrementsWithPresstip({
           {t('EnergyMeter.Used')}: {energyUsed}
           <br />
           {t('EnergyMeter.Unused')}: {energyUnused}
+          {energyUsed > energyCapacity && (
+            <>
+              <hr />
+              {t('EnergyMeter.UpgradeNeeded', energy)}
+            </>
+          )}
         </>
       }
       className={wrapperClass}
     >
       <EnergyIncrements
         energy={{
-          energyType,
           energyCapacity,
           energyUsed,
         }}
       />
+      {energyUsed > energyCapacity && <EnergySwap energy={energy} />}
     </PressTip>
   );
 }

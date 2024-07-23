@@ -1,5 +1,5 @@
-import _ from 'lodash';
 import React from 'react';
+import styles from './Select.m.scss';
 import { Settings } from './initial-settings';
 
 export default function Select({
@@ -19,7 +19,7 @@ export default function Select({
   onChange: React.ChangeEventHandler<HTMLSelectElement>;
 }) {
   return (
-    <div className="setting horizontal">
+    <div className={styles.select}>
       <label htmlFor={name}>{label}</label>
       <select name={name} value={value} required={true} onChange={onChange}>
         {options.map((option) => (
@@ -33,7 +33,7 @@ export default function Select({
 }
 
 export function mapToOptions(map: { [key: string]: string }) {
-  return _.map(map, (value, key) => ({
+  return Object.entries(map).map(([key, value]) => ({
     name: value,
     value: key,
   }));
