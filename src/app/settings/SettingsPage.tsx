@@ -617,7 +617,7 @@ export default function SettingsPage() {
 
           {$featureFlags.elgatoStreamDeck && !isPhonePortrait && <StreamDeckSettings />}
 
-          <SpeechRecognitionSettings />
+          {$featureFlags.speechRecognition && <SpeechRecognitionSettings />}
 
           {$DIM_FLAVOR !== 'release' && currentAccount?.destinyVersion === 2 && (
             <div className={styles.setting}>

@@ -33,6 +33,8 @@ export function makeFeatureFlags(env: {
     clarityDescriptions: true,
     // Elgato Stream Deck integration
     elgatoStreamDeck: true,
+    // Speech Recognition
+    speechRecognition: true,
     // Warn when DIM Sync is off and you save some DIM-specific data
     warnNoSync: true,
     // Expose the "Automatically add stat mods" Loadout Optimizer toggle

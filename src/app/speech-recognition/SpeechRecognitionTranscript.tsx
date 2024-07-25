@@ -1,4 +1,3 @@
-import { createSpeechlySpeechRecognition } from '@speechly/speech-recognition-polyfill';
 import { startFarming, stopFarming } from 'app/farming/actions';
 import { DimItem } from 'app/inventory/item-types';
 import { moveItemTo } from 'app/inventory/move-item';
@@ -6,8 +5,6 @@ import { allItemsSelector, itemInfosSelector, sortedStoresSelector } from 'app/i
 import { getCurrentStore } from 'app/inventory/stores-helpers';
 import { hideItemPopup } from 'app/item-popup/item-popup';
 import { applyLoadout } from 'app/loadout-drawer/loadout-apply';
-import { Loadout } from 'app/loadout-drawer/loadout-types';
-import { loadoutsSelector } from 'app/loadout-drawer/selectors';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { RootState } from 'app/store/types';
 import { errorLog, infoLog } from 'app/utils/log';
@@ -18,21 +15,23 @@ import { useSelector } from 'react-redux';
 import micSvg from '../../images/mic-icon.svg';
 import styles from './SpeechRecognitionTranscript.m.scss';
 
+import { useHotkey } from 'app/hotkeys/useHotkey';
 import { getTag } from 'app/inventory/dim-item-info';
+import { Loadout } from 'app/loadout/loadout-types';
+import { loadoutsSelector } from 'app/loadout/loadouts-selector';
 import { getItemDamageShortName } from 'app/utils/item-utils';
 import SpeechRecognitionNative, { useSpeechRecognition } from 'react-speech-recognition';
-
-const APP_ID = $SPEECHLY_APP_ID;
-const SpeechlySpeechRecognition = createSpeechlySpeechRecognition(APP_ID);
-SpeechRecognitionNative.applyPolyfill(SpeechlySpeechRecognition);
+import 'regenerator-runtime/runtime';
 
 export default function SpeechRecognitionTranscript({
   activationPhrase,
+  alwaysListening,
 }: {
   activationPhrase: string;
+  alwaysListening: boolean;
 }) {
   const dispatch = useThunkDispatch();
-  const [currentTranscript, setCurrentTranscript] = useState('');
+  const [transcript, setTranscript] = useState('');
   const allItems = useSelector<RootState, DimItem[]>(allItemsSelector);
   const itemInfos = useSelector(itemInfosSelector);
 
@@ -40,11 +39,22 @@ export default function SpeechRecognitionTranscript({
   const allLoadouts = useSelector(loadoutsSelector);
   const dimStore = getCurrentStore(stores)!;
 
+  if (!alwaysListening) {
+    useHotkey(
+      '\\',
+      'Activate speech recognition',
+      useCallback(() => {
+        setTranscript('Activating transcript');
+        infoLog('voice', 'Activating transcript via hotkey');
+      }, [setTranscript]),
+    );
+  }
+
   const loadouts = allLoadouts.filter(
     (loadout) =>
       dimStore?.classType === DestinyClass.Unknown ||
       loadout.classType === DestinyClass.Unknown ||
-      loadout.classType === dimStore?.classType
+      loadout.classType === dimStore?.classType,
   );
   infoLog('voice loadouts', loadouts);
 
@@ -92,7 +102,7 @@ export default function SpeechRecognitionTranscript({
       const item = determineItem(
         query,
         operableItems.filter((i) => i.item.owner !== currentChar.id),
-        allPerks
+        allPerks,
       );
       if (item) {
         infoLog('voice', 'attempting move of', item);
@@ -102,7 +112,7 @@ export default function SpeechRecognitionTranscript({
         infoLog('voice', "Didn't understand weapon name");
       }
     },
-    [dispatch, operableItems, stores, allPerks]
+    [dispatch, operableItems, stores, allPerks],
   );
 
   const farmingCallback = useCallback(
@@ -115,7 +125,7 @@ export default function SpeechRecognitionTranscript({
         dispatch(stopFarming());
       }
     },
-    [dispatch, dimStore?.id, dimStore?.name]
+    [dispatch, dimStore?.id, dimStore?.name],
   );
 
   const loadoutCallback = useCallback(
@@ -127,7 +137,7 @@ export default function SpeechRecognitionTranscript({
         dispatch(applyLoadout(dimStore, loadoutToEquip));
       }
     },
-    [dispatch, dimStore, loadouts]
+    [dispatch, dimStore, loadouts],
   );
 
   const commands = [
@@ -170,13 +180,20 @@ export default function SpeechRecognitionTranscript({
     commands,
   });
 
-  useEffect(() => {
+  const handleTranscriptChange = useCallback(() => {
     if (finalTranscript.trim() !== '') {
-      infoLog('voice transcript', currentTranscript);
-      setCurrentTranscript(finalTranscript.trim().toUpperCase());
-      setTimeout(() => setCurrentTranscript(''), 5000);
+      infoLog('voice transcript', finalTranscript);
+      setTranscript(finalTranscript.trim().toUpperCase());
+      setTimeout(() => {
+        infoLog('voice transcript', 'resetting transcript');
+        setTranscript('');
+      }, 5000);
     }
-  }, [finalTranscript, currentTranscript]);
+  }, [finalTranscript]);
+
+  useEffect(() => {
+    handleTranscriptChange();
+  }, [handleTranscriptChange]);
 
   useEffect(() => {
     SpeechRecognitionNative.startListening({ continuous: true });
@@ -188,7 +205,7 @@ export default function SpeechRecognitionTranscript({
 
   return (
     <div className={styles.speech}>
-      <span>{currentTranscript}</span>
+      <span>{transcript}</span>
       <img src={micSvg} alt="" />
     </div>
   );
@@ -197,7 +214,7 @@ export default function SpeechRecognitionTranscript({
 function determineItem(
   query: string,
   operableItems: { item: DimItem; name: string; perks: string[] | undefined }[],
-  allPerks: string[]
+  allPerks: string[],
 ): DimItem | undefined {
   const [itemQuery, perkQuery] = query.split(' with ');
 

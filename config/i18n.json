@@ -1283,6 +1283,11 @@
     "DamageResistance": "PvE Damage Resist",
     "FlinchResistance": "Flinch Resist"
   },
+  "SpeechRecognition": {
+    "Fineprint": "DIM will ask for permissions to listen to your microphone. Using an activation phrase that you set, DIM will attempt to perform the action requested by the user.",
+    "OldExtension": "It's highly recommended to uninstall the Voice DIM Chrome extension before using DIM Speech Recognition.",
+    "Toggle": "Always Listening"
+  },
   "Storage": {
     "ApiPermissionPrompt": {
       "Title": "Enable DIM Sync?",

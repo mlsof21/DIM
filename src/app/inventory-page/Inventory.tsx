@@ -25,8 +25,11 @@ export default function Inventory({ account }: { account: DestinyAccount }) {
   }
   return (
     <ErrorBoundary name="Inventory">
-      {settings.speechRecognition && (
-        <SpeechRecognitionTranscript activationPhrase={settings.activationPhrase} />
+      {$featureFlags.speechRecognition && (
+        <SpeechRecognitionTranscript
+          activationPhrase={settings.activationPhrase}
+          alwaysListening={settings.alwaysListening}
+        />
       )}
       <Stores />
       <DragPerformanceFix />

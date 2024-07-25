@@ -140,6 +140,9 @@ dependencies:
   redux-thunk:
     specifier: ^3.1.0
     version: 3.1.0(redux@5.0.1)
+  regenerator-runtime:
+    specifier: ^0.14.1
+    version: 0.14.1
   reselect:
     specifier: ^5.1.1
     version: 5.1.1

@@ -1200,17 +1200,9 @@
     "SortName": "Name",
     "SpacesSize": "{{count}} space",
     "SpacesSize_plural": "{{count}} spaces",
-<<<<<<< HEAD
-    "SpeechRecognition": {
-      "Fineprint": "DIM will ask for permissions to listen to your microphone. Using an activation phrase that you set, DIM will attempt to perform the action requested by the user.",
-      "OldExtension": "It's highly recommended to uninstall the Voice DIM Chrome extension before using DIM Speech Recognition.",
-      "Toggle": "Always Listening Speech Recognition"
-    }
-=======
     "Theme": "Theme",
     "VaultGroupingNone": "None",
     "VaultWeaponGroupingStyle": "Separate groups on different lines"
->>>>>>> @{-1}
   },
   "Sockets": {
     "ApplyPerks": "Apply Perks",
@@ -1240,6 +1232,11 @@
       "Transmat": "Preview Transmat Effect"
     },
     "SelectWishlistPerks": "Preview Wishlist Perks"
+  },
+  "SpeechRecognition": {
+    "Fineprint": "DIM will ask for permissions to listen to your microphone. Using an activation phrase that you set, DIM will attempt to perform the action requested by the user.",
+    "OldExtension": "It's highly recommended to uninstall the Voice DIM Chrome extension before using DIM Speech Recognition.",
+    "Toggle": "Always Listening"
   },
   "Stats": {
     "CrouchingSpeed": "Crouching",
