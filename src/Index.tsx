@@ -29,7 +29,7 @@ import { createWishlistObserver } from './app/wishlists/observers';
 import { observe } from 'app/store/observerMiddleware';
 infoLog(
   'app',
-  `DIM v${$DIM_VERSION} (${$DIM_FLAVOR}) - Please report any errors to https://www.github.com/DestinyItemManager/DIM/issues`
+  `DIM v${$DIM_VERSION} (${$DIM_FLAVOR}) - Please report any errors to https://www.github.com/DestinyItemManager/DIM/issues`,
 );
 
 initGoogleAnalytics();
@@ -54,7 +54,7 @@ const i18nPromise = initi18n();
     root.render(
       <Provider store={store}>
         <StorageBroken />
-      </Provider>
+      </Provider>,
     );
     return;
   }
