@@ -1,7 +1,7 @@
 import ArmorySheet from 'app/armory/ArmorySheet';
 import BungieImage from 'app/dim-ui/BungieImage';
-import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import ElementIcon from 'app/dim-ui/ElementIcon';
+import RichDestinyText from 'app/dim-ui/destiny-symbols/RichDestinyText';
 import { useHotkey } from 'app/hotkeys/useHotkey';
 import { t } from 'app/i18next-t';
 import { D1BucketHashes } from 'app/search/d1-known-values';
@@ -113,7 +113,7 @@ export function AmmoIcon({ type, className }: { type: DestinyAmmunitionType; cla
         {
           [styles.primary]: type === DestinyAmmunitionType.Primary,
         },
-        className
+        className,
       )}
       src={ammoIcons[type]}
     />
