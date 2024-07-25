@@ -5,7 +5,7 @@ import { useSetSetting } from 'app/settings/hooks';
 import { fineprintClass, settingClass } from 'app/settings/SettingsPage';
 import { useEffect, useState } from 'react';
 import { useSelector } from 'react-redux';
-import styles from './SpeechRecognitionTranscript.m.scss';
+import styles from './SpeechRecognitionSettings.m.scss';
 
 export default function SpeechRecognitionSettings() {
   // const dispatch = useThunkDispatch();
@@ -18,7 +18,7 @@ export default function SpeechRecognitionSettings() {
     if (settings.alwaysListening && settings.activationPhrase === '') {
       setShowError(true);
     }
-  }, []);
+  }, [settings.activationPhrase, settings.alwaysListening]);
 
   const onCheckChange = (checked: boolean) => {
     setSetting('alwaysListening', checked);

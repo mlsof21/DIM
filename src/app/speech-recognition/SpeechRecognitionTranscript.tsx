@@ -39,16 +39,16 @@ export default function SpeechRecognitionTranscript({
   const allLoadouts = useSelector(loadoutsSelector);
   const dimStore = getCurrentStore(stores)!;
 
-  if (!alwaysListening) {
-    useHotkey(
-      '\\',
-      'Activate speech recognition',
-      useCallback(() => {
-        setTranscript('Activating transcript');
-        infoLog('voice', 'Activating transcript via hotkey');
-      }, [setTranscript]),
-    );
-  }
+  const triggerPhrase = alwaysListening ? `${activationPhrase} ` : '';
+
+  useHotkey(
+    '\\',
+    'Activate speech recognition',
+    useCallback(() => {
+      SpeechRecognitionNative.startListening();
+      infoLog('voice', 'Activating transcript via hotkey');
+    }, []),
+  );
 
   const loadouts = allLoadouts.filter(
     (loadout) =>
@@ -116,7 +116,7 @@ export default function SpeechRecognitionTranscript({
   );
 
   const farmingCallback = useCallback(
-    (startStop: string) => {
+    (startStop: 'start' | 'stop') => {
       if (startStop.trim().toLowerCase() === 'start') {
         infoLog('voice', 'starting farming mode on', dimStore.name);
         dispatch(startFarming(dimStore.id));
@@ -142,33 +142,37 @@ export default function SpeechRecognitionTranscript({
 
   const commands = [
     {
-      command: `${activationPhrase} transfer *`,
+      command: `${triggerPhrase}transfer *`,
       callback: (item: string, ...args: { resetTranscript: () => void }[]) => {
-        infoLog('voce moveItem', { item, args: [...args] });
-        const [itemQuery, perkQuery] = item.split(' with ');
-        moveItemCallback(itemQuery.toLowerCase().trim(), perkQuery, false);
+        infoLog('voice moveItem', { item, args: [...args] });
+        let [itemQuery, perkQuery] = item.split(' with ');
+        itemQuery = itemQuery.toLowerCase().trim();
+        perkQuery = perkQuery.toLowerCase().trim();
+        moveItemCallback(itemQuery, perkQuery, false);
         infoLog('voice', { args });
         args[args.length - 1].resetTranscript();
       },
     },
     {
-      command: `${activationPhrase} equip * with *`,
-      callback: (item: string, perks: string, ...args: { resetTranscript: () => void }[]) => {
-        moveItemCallback(item.toLowerCase().trim(), perks, true);
+      command: `${triggerPhrase}equip *`,
+      callback: (item: string, ...args: { resetTranscript: () => void }[]) => {
+        let [itemQuery, perkQuery] = item.split(' with ');
+        itemQuery = itemQuery.toLowerCase().trim();
+        perkQuery = perkQuery.toLowerCase().trim();
+        moveItemCallback(itemQuery, perkQuery, true);
         args[args.length - 1].resetTranscript();
       },
     },
     {
-      command: [`${activationPhrase} loadout *`, `${activationPhrase} load out *`],
+      command: [`${triggerPhrase}loadout *`, `${triggerPhrase}load out *`],
       callback: (loadoutName: string, ...args: { resetTranscript: () => void }[]) => {
         loadoutCallback(loadoutName);
         args[args.length - 1].resetTranscript();
       },
     },
-
     {
-      command: `${activationPhrase} :startStop farming mode`,
-      callback: (startStop: string, ...args: { resetTranscript: () => void }[]) => {
+      command: `${triggerPhrase}:startStop farming mode`,
+      callback: (startStop: 'start' | 'stop', ...args: { resetTranscript: () => void }[]) => {
         farmingCallback(startStop);
         args[args.length - 1].resetTranscript();
       },
@@ -189,15 +193,21 @@ export default function SpeechRecognitionTranscript({
         setTranscript('');
       }, 5000);
     }
-  }, [finalTranscript]);
+
+    if (!alwaysListening) {
+      SpeechRecognitionNative.stopListening();
+    }
+  }, [alwaysListening, finalTranscript]);
 
   useEffect(() => {
     handleTranscriptChange();
   }, [handleTranscriptChange]);
 
   useEffect(() => {
-    SpeechRecognitionNative.startListening({ continuous: true });
-  });
+    if (alwaysListening) {
+      SpeechRecognitionNative.startListening({ continuous: true });
+    }
+  }, [alwaysListening]);
 
   if (!browserSupportsSpeechRecognition) {
     errorLog('voice', 'Speech recognition is not supported by this browser');
