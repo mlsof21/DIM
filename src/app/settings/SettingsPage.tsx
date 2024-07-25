@@ -228,7 +228,9 @@ export default function SettingsPage() {
     $featureFlags.elgatoStreamDeck && !isPhonePortrait
       ? { id: 'stream-deck', title: 'Elgato Stream Deck' }
       : undefined,
-    { id: 'speech-recognition', title: 'Speech Recognition' },
+    $featureFlags.speechRecognition
+      ? { id: 'speech-recognition', title: 'Speech Recognition' }
+      : undefined,
   ]);
 
   return (
