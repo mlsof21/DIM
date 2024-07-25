@@ -1,27 +1,27 @@
+import 'regenerator-runtime/runtime';
+
 import { startFarming, stopFarming } from 'app/farming/actions';
+import { useHotkey } from 'app/hotkeys/useHotkey';
+import { getTag } from 'app/inventory/dim-item-info';
 import { DimItem } from 'app/inventory/item-types';
 import { moveItemTo } from 'app/inventory/move-item';
 import { allItemsSelector, itemInfosSelector, sortedStoresSelector } from 'app/inventory/selectors';
 import { getCurrentStore } from 'app/inventory/stores-helpers';
 import { hideItemPopup } from 'app/item-popup/item-popup';
 import { applyLoadout } from 'app/loadout-drawer/loadout-apply';
+import { Loadout } from 'app/loadout/loadout-types';
+import { loadoutsSelector } from 'app/loadout/loadouts-selector';
 import { useThunkDispatch } from 'app/store/thunk-dispatch';
 import { RootState } from 'app/store/types';
+import { getItemDamageShortName } from 'app/utils/item-utils';
 import { errorLog, infoLog } from 'app/utils/log';
 import { DestinyClass } from 'bungie-api-ts/destiny2';
 import Fuse from 'fuse.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
+import SpeechRecognitionNative, { useSpeechRecognition } from 'react-speech-recognition';
 import micSvg from '../../images/mic-icon.svg';
 import styles from './SpeechRecognitionTranscript.m.scss';
-
-import { useHotkey } from 'app/hotkeys/useHotkey';
-import { getTag } from 'app/inventory/dim-item-info';
-import { Loadout } from 'app/loadout/loadout-types';
-import { loadoutsSelector } from 'app/loadout/loadouts-selector';
-import { getItemDamageShortName } from 'app/utils/item-utils';
-import SpeechRecognitionNative, { useSpeechRecognition } from 'react-speech-recognition';
-import 'regenerator-runtime/runtime';
 
 export default function SpeechRecognitionTranscript({
   activationPhrase,
