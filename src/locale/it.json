@@ -632,12 +632,8 @@
       "Masterworked": "+2 in ogni statistica, presunto livello 10 di energia.",
       "None": "Tutte le armature:\n$t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Aggiungi le Modifiche statistiche necessarie",
-=======
     "AutoStatMods": "Aggiungi Modifiche statistiche automaticamente",
     "AutomaticallyPicked": "Questa Modifica è stata aggiunta automaticamente per migliorare le statistiche della build.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Scegli un altro oggetto",
     "CompareLoadout": "Confronta dotazioni",
     "ConfirmOverwrite": "Sei sicuro di voler sostituire l'armatura nella dotazione \"{{name}}\" con questo nuovo set di armature?",

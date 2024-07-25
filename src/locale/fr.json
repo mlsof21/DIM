@@ -632,12 +632,8 @@
       "Masterworked": "+2 dans toutes les stats, considère un niveau d'énergie de 10.",
       "None": "Toutes les armures : $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Add required stat mods",
-=======
     "AutoStatMods": "Ajouter automatiquement les mods de statistiques",
     "AutomaticallyPicked": "Ce mod a été ajouté automatiquement pour améliorer les statistiques de l'équipement.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Choisir un autre objet",
     "CompareLoadout": "Comparer l'équipement",
     "ConfirmOverwrite": "Êtes-vous sûr de vouloir remplacer l'armure dans l'équipement \"{{name}}\" par ce nouvel ensemble d'armure ?",

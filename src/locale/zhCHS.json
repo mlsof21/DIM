@@ -632,12 +632,8 @@
       "Masterworked": "每项属性值 +2，假定能量等级为 10。",
       "None": "所有护甲：$t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Add required stat mods",
-=======
     "AutoStatMods": "自动添加属性模组",
     "AutomaticallyPicked": "此模组已被自动添加以优化配装属性。",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "选择另一个物品",
     "CompareLoadout": "对比配装",
     "ConfirmOverwrite": "你确定要用这套新的护甲来替换配装“{{name}}”里的护甲吗？",

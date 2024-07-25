@@ -632,12 +632,8 @@
       "Masterworked": "+2 em cada atributo, assumido nível 10 de energia.",
       "None": "Todas as Armaduras: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Adicionar mods de atributos ncessários",
-=======
     "AutoStatMods": "Adiciona mods de atributo automaticamente",
     "AutomaticallyPicked": "Este mod foi adicionado automaticamente para melhorar os atributos do set.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Escolher outro item",
     "CompareLoadout": "Comparar Sets",
     "ConfirmOverwrite": "Você tem certeza que deseja substituir a armadura do set \"{{name}}\" com este novo conjunto de armaduras?",

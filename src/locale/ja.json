@@ -632,14 +632,9 @@
       "Masterworked": "各ステータス +2、エネルギーレベル 10 を想定。",
       "None": "すべてのアーマー: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "必要なステータスの mod を追加",
-    "ChooseAlternateTitle": "別のアイテムを選択してください。",
-=======
     "AutoStatMods": "自動的にステータス mod を追加する",
     "AutomaticallyPicked": "この mod はビルドのステータス値を改善するため自動的に追加されました。",
     "ChooseAlternateTitle": "別アイテムを選択",
->>>>>>> @{-1}
     "CompareLoadout": "ロードアウトを比較",
     "ConfirmOverwrite": "ロードアウト「{{name}}」のアーマーをこの新しいアーマーセットに置き換えてもよろしいですか？",
     "DecreaseStatPriority": "ステータス優先度を下げる",

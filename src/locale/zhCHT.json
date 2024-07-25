@@ -632,12 +632,8 @@
       "Masterworked": "+2 in each stat, assumed energy level 10.",
       "None": "All armor: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Add required stat mods",
-=======
     "AutoStatMods": "自動添加屬性模組",
     "AutomaticallyPicked": "此模組已被自動添加以優化配裝屬性。",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "選擇另一個物品",
     "CompareLoadout": "對比配裝",
     "ConfirmOverwrite": "你確定要用這套新的護甲來替換配裝「{{name}}」里的護甲嗎？",

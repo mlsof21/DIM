@@ -632,12 +632,8 @@
       "Masterworked": "+2 in each stat, assumed energy level 10.",
       "None": "All armor: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Add required stat mods",
-=======
     "AutoStatMods": "Automatycznie dodaj modyfikacje statystyk",
     "AutomaticallyPicked": "This mod was added automatically to improve build stats.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Wybierz inny przedmiot",
     "CompareLoadout": "Porównaj uzbrojenie",
     "ConfirmOverwrite": "Czy na pewno chcesz zastąpić pancerz w uzbrojeniu \"{{name}}\" tym nowym zestawem pancerza?",

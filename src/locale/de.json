@@ -632,12 +632,8 @@
       "Masterworked": "+2 für jeden Wert, bei einer Energiekapazität von 10.",
       "None": "Alle Rüstungen: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Benötigte Statistik-Mods hinzufügen",
-=======
     "AutoStatMods": "Stat-Mods automatisch hinzufügen",
     "AutomaticallyPicked": "Dieser Mod wurde automatisch hinzugefügt, um Build-Stats zu verbessern.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Wähle einen anderen Gegenstand",
     "CompareLoadout": "Vergleiche Loadout",
     "ConfirmOverwrite": "Bist du sicher, dass du die Gegenstände in deinem Loadout \"{{name}}\" durch dieses neue Rüstungsset ersetzen möchtest?",

@@ -632,12 +632,8 @@
       "Masterworked": "+2 en cada estadística, asumiendo nivel de energía 10.",
       "None": "Todas las armaduras: $t(LoadoutBuilder.AssumeMasterworkOptions.Current)"
     },
-<<<<<<< HEAD
-    "AutoStatMods": "Añadir modificadores de estadísticas requeridos",
-=======
     "AutoStatMods": "Añadir automáticamente modificadores de estadísticas",
     "AutomaticallyPicked": "Este modificador fue añadido automáticamente para mejorar las estadísticas de la equipación.",
->>>>>>> @{-1}
     "ChooseAlternateTitle": "Elige otro objeto",
     "CompareLoadout": "Comparar Equipación",
     "ConfirmOverwrite": "¿Estás seguro de que quieres reemplazar la armadura en la equipación \"{{name}}\" con este nuevo set de armadura?",
