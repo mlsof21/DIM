@@ -16,7 +16,7 @@ import { RootState } from 'app/store/types';
 import { getItemDamageShortName } from 'app/utils/item-utils';
 import { errorLog, infoLog } from 'app/utils/log';
 import { DestinyClass } from 'bungie-api-ts/destiny2';
-import Fuse from 'fuse.js';
+import Fuse, { FuseResult, IFuseOptions } from 'fuse.js';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import SpeechRecognitionNative, { useSpeechRecognition } from 'react-speech-recognition';
@@ -255,8 +255,8 @@ function determineLoadout(loadoutRequested: string, loadouts: Loadout[]): Loadou
   return loadoutResult?.item;
 }
 
-function getClosestMatch<T>(query: string, availableItems: T[]): Fuse.FuseResult<T> | null {
-  const options: Fuse.IFuseOptions<T> = {
+function getClosestMatch<T>(query: string, availableItems: T[]): FuseResult<T> | null {
+  const options: IFuseOptions<T> = {
     includeScore: true,
     shouldSort: true,
     findAllMatches: true,

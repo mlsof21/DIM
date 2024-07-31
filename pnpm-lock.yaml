@@ -56,6 +56,9 @@ dependencies:
   '@textcomplete/utils':
     specifier: ^0.1.13
     version: 0.1.13
+  '@types/react-speech-recognition':
+    specifier: ^3.9.5
+    version: 3.9.5
   bungie-api-ts:
     specifier: ^5.1.0
     version: 5.1.0
@@ -83,6 +86,9 @@ dependencies:
   framer-motion:
     specifier: ^11.2.12
     version: 11.2.12(react-dom@18.3.1)(react@18.3.1)
+  fuse.js:
+    specifier: ^7.0.0
+    version: 7.0.0
   i18next:
     specifier: ^23.11.5
     version: 23.11.5
@@ -2990,6 +2996,10 @@ packages:
     resolution: {integrity: sha512-3Iten7X3Zgwvk6kh6/NRdwN7WbZ760YgFCsF5AxDifltUQzW1RaW+WRmcVtgwFzLjaNu64H+0MPJ13yRa8g3Dw==}
     dev: true
 
+  /@types/dom-speech-recognition@0.0.4:
+    resolution: {integrity: sha512-zf2GwV/G6TdaLwpLDcGTIkHnXf8JEf/viMux+khqKQKDa8/8BAUtXXZS563GnvJ4Fg0PBLGAaFf2GekEVSZ6GQ==}
+    dev: false
+
   /@types/eslint-scope@3.7.7:
     resolution: {integrity: sha512-MzMFlSLBqNF2gcHWO0G1vP/YQyfvrxZ0bF+u7mzUdZ1/xK4A4sru+nraZz5i3iEIk1l1uyicaDVTB4QbbEkAYg==}
     dependencies:
@@ -3184,6 +3194,12 @@ packages:
     dependencies:
       '@types/react': 18.3.3
     dev: true
+
+  /@types/react-speech-recognition@3.9.5:
+    resolution: {integrity: sha512-m3Sg3Xtj/YcEUu+nLPGwI6oq1wcSblsuyAmXgBfW6Nprfmtl+A+kH4ruPzzFKnFkq6WmmRxdsLvt0nLRAAJtBw==}
+    dependencies:
+      '@types/dom-speech-recognition': 0.0.4
+    dev: false
 
   /@types/react-test-renderer@18.3.0:
     resolution: {integrity: sha512-HW4MuEYxfDbOHQsVlY/XtOvNHftCVEPhJF2pQXXwcUiUF+Oyb0usgp48HSgpK5rt8m9KZb22yqOeZm+rrVG8gw==}
@@ -6754,6 +6770,11 @@ packages:
   /functions-have-names@1.2.3:
     resolution: {integrity: sha512-xckBUXyTIqT97tq2x2AMb+g163b5JFysYk0x4qxNFwbfQkmNZoiRHb6sPzI9/QV33WeuvVYBUIiD4NzNIyqaRQ==}
     dev: true
+
+  /fuse.js@7.0.0:
+    resolution: {integrity: sha512-14F4hBIxqKvD4Zz/XjDc3y94mNZN6pRv3U13Udo0lNLCWRBUsrMv2xwcF/y/Z5sV6+FQW+/ow68cHpm4sunt8Q==}
+    engines: {node: '>=10'}
+    dev: false
 
   /generate-json-webpack-plugin@2.0.0:
     resolution: {integrity: sha512-WVEHXiES7YwjLAjWquC5+IspZM4Pwtx1yHlHTBXHkp38HVjnHJo29PxLniWPSyiB539iDgeAcMNUBStrixx3Jw==}
